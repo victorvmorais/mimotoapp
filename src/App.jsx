@@ -119,16 +119,15 @@ function FuelGauge({ liters, capacity, reserveL=3, kmpl=36 }) {
 
 function Modal({ title, onClose, children }) {
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(11,19,38,0.75)",zIndex:200,display:"flex",alignItems:"flex-end",WebkitAlignItems:"flex-end"}}>
-      <div style={{background:C.white,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"88vh",display:"flex",flexDirection:"column"}}>
-        <div style={{padding:"16px 16px 0",flexShrink:0}}>
-          <div style={{width:36,height:4,borderRadius:2,background:C.surface,margin:"0 auto 16px"}}/>
+    <div style={{position:"fixed",inset:0,background:"rgba(11,19,38,0.75)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
+      <div style={{background:C.white,borderRadius:20,width:"100%",maxWidth:440,maxHeight:"80vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(11,19,38,0.4)"}}>
+        <div style={{padding:"18px 18px 0",flexShrink:0}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
             <div style={{fontSize:17,fontWeight:700,color:C.navy}}>{title}</div>
-            <button onClick={onClose} style={{background:C.surface,border:"none",color:C.textMid,borderRadius:"50%",width:32,height:32,cursor:"pointer",fontSize:16}}>✕</button>
+            <button onClick={onClose} style={{background:C.surface,border:"none",color:C.textMid,borderRadius:"50%",width:32,height:32,cursor:"pointer",fontSize:16,flexShrink:0}}>✕</button>
           </div>
         </div>
-        <div style={{overflowY:"auto",padding:"0 16px 40px",WebkitOverflowScrolling:"touch",flex:1}}>
+        <div style={{overflowY:"auto",padding:"0 18px 24px",WebkitOverflowScrolling:"touch",flex:1}}>
           {children}
         </div>
       </div>
