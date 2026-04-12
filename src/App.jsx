@@ -68,24 +68,45 @@ function Stars({ rating }) {
 }
 
 // ---- FUEL GAUGE ----
-function FuelGauge({ liters, capacity }) {
+function FuelGauge({ liters, capacity, reserveL=3, kmpl=36 }) {
   const pct = capacity > 0 ? Math.min(100, Math.round((liters/capacity)*100)) : 0;
-  const color = pct > 50 ? "#00C896" : pct > 25 ? "#F07D1A" : "#E84040";
+  const reservePct = capacity > 0 ? Math.round((reserveL/capacity)*100) : 25;
+  const inReserve = pct <= reservePct;
+  const color = pct > reservePct*2 ? "#00C896" : pct > reservePct ? "#F07D1A" : "#E84040";
+  const kmLeft = Math.round(liters * kmpl);
+  const arcLen = 220;
+  const reserveArcLen = (reservePct/100)*arcLen;
   return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"20px 16px 8px",width:"100%"}}>
-      <div style={{position:"relative",width:"100%",maxWidth:240}}>
-        <svg viewBox="0 0 160 90" width="100%" style={{display:"block"}}>
-          <path d="M10 85 A70 70 0 0 1 150 85" fill="none" stroke="#2a2a3a" strokeWidth="12" strokeLinecap="round"/>
-          <path d="M10 85 A70 70 0 0 1 150 85" fill="none" stroke={color} strokeWidth="12" strokeLinecap="round"
-            strokeDasharray={`${(pct/100)*220} 220`}/>
-          <text x="80" y="72" textAnchor="middle" fill={color} fontSize="22" fontWeight="800" fontFamily="Inter,sans-serif">{pct}%</text>
-          <text x="80" y="84" textAnchor="middle" fill="#666" fontSize="9" fontFamily="Inter,sans-serif">{liters.toFixed(1)}L / {capacity}L</text>
+      <div style={{position:"relative",width:"100%",maxWidth:260}}>
+        <svg viewBox="0 0 160 95" width="100%" style={{display:"block"}}>
+          {/* Track */}
+          <path d="M10 85 A70 70 0 0 1 150 85" fill="none" stroke="#1a1a2a" strokeWidth="14" strokeLinecap="round"/>
+          {/* Reserve zone */}
+          <path d="M10 85 A70 70 0 0 1 150 85" fill="none" stroke="rgba(232,64,64,0.15)" strokeWidth="14" strokeLinecap="round"
+            strokeDasharray={`${reserveArcLen} ${arcLen}`}/>
+          {/* Fill */}
+          <path d="M10 85 A70 70 0 0 1 150 85" fill="none" stroke={color} strokeWidth="14" strokeLinecap="round"
+            strokeDasharray={`${(pct/100)*arcLen} ${arcLen}`}/>
+          {/* Center text */}
+          <text x="80" y="68" textAnchor="middle" fill={color} fontSize="24" fontWeight="800" fontFamily="Inter,sans-serif">{pct}%</text>
+          <text x="80" y="80" textAnchor="middle" fill="#666" fontSize="9" fontFamily="Inter,sans-serif">{liters.toFixed(1)}L / {capacity}L</text>
         </svg>
       </div>
-      <div style={{display:"flex",justifyContent:"space-between",width:"100%",maxWidth:240,marginTop:2}}>
-        <span style={{fontSize:10,color:"#555"}}>Vazio</span>
-        <span style={{fontSize:10,color:"#555"}}>Cheio</span>
+      {/* Stats row */}
+      <div style={{display:"flex",gap:8,width:"100%",maxWidth:260,marginTop:4}}>
+        <div style={{flex:1,background:"#1a1a2a",borderRadius:10,padding:"8px 6px",textAlign:"center"}}>
+          <div style={{fontSize:14,fontWeight:800,color:inReserve?"#E84040":"#fff"}}>{kmLeft} km</div>
+          <div style={{fontSize:9,color:"#555",marginTop:1}}>autonomia est.</div>
+        </div>
+        <div style={{flex:1,background:"#1a1a2a",borderRadius:10,padding:"8px 6px",textAlign:"center"}}>
+          <div style={{fontSize:14,fontWeight:800,color:inReserve?"#E84040":"#F07D1A"}}>{inReserve?"RESERVA":"OK"}</div>
+          <div style={{fontSize:9,color:"#555",marginTop:1}}>reserva: {reserveL}L</div>
+        </div>
       </div>
+      {inReserve && <div style={{marginTop:8,background:"rgba(232,64,64,0.1)",border:"1px solid rgba(232,64,64,0.3)",borderRadius:10,padding:"8px 12px",fontSize:12,color:"#E84040",fontWeight:600,textAlign:"center",width:"100%",maxWidth:260}}>
+        ⚠️ No reserva! Abasteça em breve
+      </div>}
     </div>
   );
 }
@@ -149,7 +170,7 @@ export default function App() {
   const [only24h, setOnly24h] = useState(false);
 
   // PROFILE state
-  const [profile, setProfile] = useState({ name:"", moto:"", year:"", kmpl:"", tankL:"", currentKm:"", photoUrl:"" });
+  const [profile, setProfile] = useState({ name:"Victor", moto:"Yamaha Crosser ZTX", year:"2019", kmpl:"36", tankL:"12", reserveL:"3", currentKm:"77903", photoUrl:"" });
   const [profileForm, setProfileForm] = useState(null);
   const [profileSaving, setProfileSaving] = useState(false);
 
@@ -161,7 +182,7 @@ export default function App() {
   // FUEL state
   const [fuelList, setFuelList] = useState([]);
   const [showFuelForm, setShowFuelForm] = useState(false);
-  const [fuelForm, setFuelForm] = useState({ liters:"", pricePerLiter:"", km:"", date:new Date().toISOString().slice(0,10) });
+  const [fuelForm, setFuelForm] = useState({ liters:"", pricePerLiter:"", km:"", date:new Date().toISOString().slice(0,10), tankFull:false });
   const [currentFuelLiters, setCurrentFuelLiters] = useState(0);
 
   // Load Firebase data
@@ -176,7 +197,8 @@ export default function App() {
   async function loadProfile() {
     try {
       const snap = await getDoc(doc(db,"users",USER_ID));
-      if (snap.exists()) setProfile(snap.data());
+      const defaults = { name:"Victor", moto:"Yamaha Crosser ZTX", year:"2019", kmpl:"36", tankL:"12", reserveL:"3", currentKm:"77903", photoUrl:"" };
+      if (snap.exists()) setProfile({...defaults,...snap.data()}); else { await setDoc(doc(db,"users",USER_ID), defaults); }
     } catch(e) {}
   }
   async function saveProfile(data) {
@@ -212,16 +234,20 @@ export default function App() {
       const snap = await getDocs(q);
       const list = snap.docs.map(d=>({id:d.id,...d.data()}));
       setFuelList(list);
-      // Calcular litros atuais: pega o abastecimento mais recente
-      if (list.length > 0) setCurrentFuelLiters(parseFloat(list[0].liters)||0);
+      if (list.length > 0) {
+        const last = list[0];
+        const liters = last.tankFull ? (parseFloat(profile.tankL)||12) : parseFloat(last.liters)||0;
+        setCurrentFuelLiters(liters);
+      }
     } catch(e) {}
   }
   async function addFuel() {
     try {
       await addDoc(collection(db,"users",USER_ID,"fuel"), fuelForm);
-      setCurrentFuelLiters(parseFloat(fuelForm.liters)||0);
+      const litersToShow = fuelForm.tankFull ? (parseFloat(profile.tankL)||12) : parseFloat(fuelForm.liters)||0;
+      setCurrentFuelLiters(litersToShow);
       setShowFuelForm(false);
-      setFuelForm({ liters:"", pricePerLiter:"", km:"", date:new Date().toISOString().slice(0,10) });
+      setFuelForm({ liters:"", pricePerLiter:"", km:"", date:new Date().toISOString().slice(0,10), tankFull:false });
       loadFuel();
     } catch(e) {}
   }
@@ -452,7 +478,7 @@ export default function App() {
 
       {tankCapacity > 0 ? (
         <div style={{background:"#2a2a3a",borderRadius:16,marginBottom:16,border:"1px solid #3a3a4a"}}>
-          <FuelGauge liters={currentFuelLiters} capacity={tankCapacity}/>
+          <FuelGauge liters={currentFuelLiters} capacity={tankCapacity} reserveL={parseFloat(profile.reserveL)||3} kmpl={parseFloat(profile.kmpl)||36}/>
           <div style={{padding:"0 16px 16px",textAlign:"center",fontSize:12,color:"#666"}}>
             Último abastecimento: {fuelList[0]?.date||"—"}
           </div>
@@ -473,7 +499,7 @@ export default function App() {
             return <div key={f.id} style={{background:"#2a2a3a",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid #3a3a4a"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
                 <div>
-                  <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>⛽ {parseFloat(f.liters).toFixed(1)}L</div>
+                  <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>⛽ {parseFloat(f.liters).toFixed(1)}L {f.tankFull&&<span style={{fontSize:11,fontWeight:700,color:"#00C896",background:"rgba(0,200,150,0.12)",padding:"2px 7px",borderRadius:99,border:"1px solid rgba(0,200,150,0.3)"}}>Tanque cheio</span>}</div>
                   <div style={{fontSize:11,color:"#666",marginTop:2}}>{f.date}{f.km?` · ${f.km} km`:""}</div>
                 </div>
                 <div style={{textAlign:"right"}}>
@@ -490,11 +516,23 @@ export default function App() {
       {showFuelForm && <Modal title="Registrar Abastecimento" onClose={()=>setShowFuelForm(false)}>
         <Input label="Litros abastecidos" value={fuelForm.liters} onChange={v=>setFuelForm(f=>({...f,liters:v}))} type="number" placeholder="Ex: 12.5"/>
         <Input label="Preço por litro (R$)" value={fuelForm.pricePerLiter} onChange={v=>setFuelForm(f=>({...f,pricePerLiter:v}))} type="number" placeholder="Ex: 6.49"/>
-        <Input label="Quilometragem atual" value={fuelForm.km} onChange={v=>setFuelForm(f=>({...f,km:v}))} type="number" placeholder="Ex: 15230"/>
+        <Input label="Quilometragem atual" value={fuelForm.km} onChange={v=>setFuelForm(f=>({...f,km:v}))} type="number" placeholder="Ex: 77903"/>
         <Input label="Data" value={fuelForm.date} onChange={v=>setFuelForm(f=>({...f,date:v}))} type="date"/>
+
+        {/* Toggle tanque cheio */}
+        <div onClick={()=>setFuelForm(f=>({...f,tankFull:!f.tankFull}))} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:fuelForm.tankFull?"rgba(0,200,150,0.1)":"#2a2a3a",border:`1.5px solid ${fuelForm.tankFull?"#00C896":"#3a3a4a"}`,borderRadius:12,padding:"12px 14px",marginBottom:14,cursor:"pointer"}}>
+          <div>
+            <div style={{fontSize:14,fontWeight:600,color:fuelForm.tankFull?"#00C896":"#fff"}}>🔋 Completei o tanque</div>
+            <div style={{fontSize:11,color:"#666",marginTop:2}}>O gauge vai mostrar 100%</div>
+          </div>
+          <div style={{width:44,height:26,borderRadius:99,background:fuelForm.tankFull?"#00C896":"#3a3a4a",position:"relative",transition:"background 0.2s",flexShrink:0}}>
+            <div style={{position:"absolute",top:3,left:fuelForm.tankFull?20:3,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
+          </div>
+        </div>
+
         {fuelForm.liters&&fuelForm.pricePerLiter&&<div style={{background:"rgba(240,125,26,0.1)",borderRadius:10,padding:"10px 12px",marginBottom:14,fontSize:13,color:"#F07D1A",fontWeight:600}}>
           Total: R$ {((parseFloat(fuelForm.liters)||0)*(parseFloat(fuelForm.pricePerLiter)||0)).toFixed(2)}
-          {tankCapacity>0&&` · Tanque: ${Math.min(100,Math.round((parseFloat(fuelForm.liters)/tankCapacity)*100))}%`}
+          {fuelForm.tankFull ? " · Tanque: 100% ✓" : tankCapacity>0&&` · Tanque: ${Math.min(100,Math.round((parseFloat(fuelForm.liters)/tankCapacity)*100))}%`}
         </div>}
         <Btn onClick={addFuel} disabled={!fuelForm.liters||!fuelForm.pricePerLiter}>Salvar Abastecimento</Btn>
       </Modal>}
@@ -604,7 +642,8 @@ export default function App() {
             <Input label="Modelo da moto" value={form.moto} onChange={v=>setProfileForm(f=>({...f,moto:v}))} placeholder="Ex: Yamaha Crosser ZTX"/>
             <Input label="Ano" value={form.year} onChange={v=>setProfileForm(f=>({...f,year:v}))} type="number" placeholder="Ex: 2019"/>
             <Input label="Consumo (km/litro)" value={form.kmpl} onChange={v=>setProfileForm(f=>({...f,kmpl:v}))} type="number" placeholder="Ex: 30"/>
-            <Input label="Capacidade do tanque (litros)" value={form.tankL} onChange={v=>setProfileForm(f=>({...f,tankL:v}))} type="number" placeholder="Ex: 14"/>
+            <Input label="Capacidade do tanque (litros)" value={form.tankL} onChange={v=>setProfileForm(f=>({...f,tankL:v}))} type="number" placeholder="Ex: 12"/>
+            <Input label="Litros de reserva" value={form.reserveL} onChange={v=>setProfileForm(f=>({...f,reserveL:v}))} type="number" placeholder="Ex: 3"/>
             <Input label="Quilometragem atual" value={form.currentKm} onChange={v=>setProfileForm(f=>({...f,currentKm:v}))} type="number" placeholder="Ex: 15230"/>
             <div style={{display:"flex",gap:10,marginTop:4}}>
               <Btn onClick={()=>setProfileForm(null)} color="#2a2a3a" style={{flex:1}}>Cancelar</Btn>
