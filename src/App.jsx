@@ -20,7 +20,7 @@ const GOOGLE_MAPS_API_KEY = "AIzaSyAWK94SwutfM0M6dxukmrUTQCfg4a83ltE";
 const CATEGORIES = [
   { id: "tire", label: "Borracharias", icon: "🔧", type: "car_repair",  keyword: "borracharia",     color: "#E84040" },
   { id: "gas",  label: "Postos",       icon: "⛽", type: "gas_station", keyword: null,              color: "#F07D1A" },
-  { id: "tow",  label: "Reboques",     icon: "🚛", type: "car_repair",  keyword: "reboque",         color: "#4A90E2" },
+  { id: "tow",  label: "Reboques",     icon: "🚛", type: null,           keyword: "reboque 24h",     color: "#4A90E2" },
 ];
 
 const MANUT_TYPES = [
@@ -71,21 +71,18 @@ function Stars({ rating }) {
 function FuelGauge({ liters, capacity }) {
   const pct = capacity > 0 ? Math.min(100, Math.round((liters/capacity)*100)) : 0;
   const color = pct > 50 ? "#00C896" : pct > 25 ? "#F07D1A" : "#E84040";
-  const angle = -135 + (pct/100)*270;
   return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"20px 0 8px"}}>
-      <div style={{position:"relative",width:160,height:100}}>
-        <svg width="160" height="100" viewBox="0 0 160 100">
-          <path d="M10 90 A70 70 0 0 1 150 90" fill="none" stroke="#2a2a3a" strokeWidth="14" strokeLinecap="round"/>
-          <path d="M10 90 A70 70 0 0 1 150 90" fill="none" stroke={color} strokeWidth="14" strokeLinecap="round"
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"20px 16px 8px",width:"100%"}}>
+      <div style={{position:"relative",width:"100%",maxWidth:240}}>
+        <svg viewBox="0 0 160 90" width="100%" style={{display:"block"}}>
+          <path d="M10 85 A70 70 0 0 1 150 85" fill="none" stroke="#2a2a3a" strokeWidth="12" strokeLinecap="round"/>
+          <path d="M10 85 A70 70 0 0 1 150 85" fill="none" stroke={color} strokeWidth="12" strokeLinecap="round"
             strokeDasharray={`${(pct/100)*220} 220`}/>
+          <text x="80" y="72" textAnchor="middle" fill={color} fontSize="22" fontWeight="800" fontFamily="Inter,sans-serif">{pct}%</text>
+          <text x="80" y="84" textAnchor="middle" fill="#666" fontSize="9" fontFamily="Inter,sans-serif">{liters.toFixed(1)}L / {capacity}L</text>
         </svg>
-        <div style={{position:"absolute",bottom:0,left:"50%",transform:"translateX(-50%)",textAlign:"center"}}>
-          <div style={{fontSize:28,fontWeight:800,color}}>{pct}%</div>
-          <div style={{fontSize:11,color:"#666"}}>{liters.toFixed(1)}L / {capacity}L</div>
-        </div>
       </div>
-      <div style={{display:"flex",justifyContent:"space-between",width:160,marginTop:4}}>
+      <div style={{display:"flex",justifyContent:"space-between",width:"100%",maxWidth:240,marginTop:2}}>
         <span style={{fontSize:10,color:"#555"}}>Vazio</span>
         <span style={{fontSize:10,color:"#555"}}>Cheio</span>
       </div>
@@ -97,7 +94,7 @@ function FuelGauge({ liters, capacity }) {
 function Modal({ title, onClose, children }) {
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:200,display:"flex",alignItems:"flex-end"}}>
-      <div style={{background:"#1a1a2a",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:480,margin:"0 auto",padding:"20px 16px 40px",maxHeight:"85vh",overflowY:"auto"}}>
+      <div style={{background:"#1a1a2a",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:480,margin:"0 auto",padding:"20px 16px calc(env(safe-area-inset-bottom) + 24px)",maxHeight:"78dvh",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <div style={{fontSize:17,fontWeight:700,color:"#fff"}}>{title}</div>
           <button onClick={onClose} style={{background:"#2a2a3a",border:"none",color:"#888",borderRadius:"50%",width:32,height:32,cursor:"pointer",fontSize:16}}>✕</button>
@@ -289,7 +286,7 @@ export default function App() {
     const center = new window.google.maps.LatLng(lat,lng);
     const result={tire:[],gas:[],tow:[]}; let done=0;
     CATEGORIES.forEach(cat => {
-      service.nearbySearch({location:center,radius:5000,type:cat.type,...(cat.keyword&&{keyword:cat.keyword})},(results,status) => {
+      service.nearbySearch({location:center,radius:5000,...(cat.type&&{type:cat.type}),...(cat.keyword&&{keyword:cat.keyword})},(results,status) => {
         const OK=window.google.maps.places.PlacesServiceStatus.OK;
         const items=status===OK&&results?results.slice(0,10):[];
         if (!items.length) { done++; if(done===CATEGORIES.length){placeMarkers(lat,lng,result);setPlaces({...result});setLoading(false);} return; }
