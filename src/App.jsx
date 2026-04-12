@@ -3,9 +3,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 const GOOGLE_MAPS_API_KEY = "AIzaSyAWK94SwutfM0M6dxukmrUTQCfg4a83ltE";
 
 const CATEGORIES = [
-  { id: "tire",  label: "Borracharias",      icon: "🔧", type: "car_repair",  keyword: "borracharia",    color: "#E84040" },
-  { id: "gas",   label: "Postos",             icon: "⛽", type: "gas_station", keyword: "posto gasolina", color: "#F07D1A" },
-  { id: "tow",   label: "Guinchos",           icon: "🚛", type: "car_repair",  keyword: "guincho reboque",color: "#4A90E2" },
+  { id: "tire", label: "Borracharias",     icon: "🔧", type: "car_repair",  keyword: "borracharia",     color: "#E84040" },
+  { id: "gas",  label: "Postos",           icon: "⛽", type: "gas_station", keyword: null,              color: "#F07D1A" },
+  { id: "tow",  label: "Guinchos",         icon: "🚛", type: "car_repair",  keyword: "guincho reboque", color: "#4A90E2" },
 ];
 
 function getDistance(lat1, lng1, lat2, lng2) {
@@ -15,20 +15,16 @@ function getDistance(lat1, lng1, lat2, lng2) {
   const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
-
 function distLabel(m) { return m < 1000 ? `${Math.round(m)}m` : `${(m/1000).toFixed(1)}km`; }
-
 function getWA(phone) {
   if (!phone) return null;
   const d = phone.replace(/\D/g,"");
   if (d.length < 10 || d.length > 13) return null;
   return `https://wa.me/${d.startsWith("55") ? d : "55"+d}`;
 }
-
 function is24h(place) {
   const periods = place.opening_hours?.periods;
   if (!periods) return false;
-  // Google retorna period com open.day=0 e sem close quando é 24h
   return periods.some(p => p.open && !p.close);
 }
 
@@ -161,36 +157,41 @@ export default function App() {
     let done = 0;
 
     CATEGORIES.forEach(cat => {
-      service.nearbySearch(
-        { location: center, radius: 5000, type: cat.type, keyword: cat.keyword },
-        (results, status) => {
-          const OK = window.google.maps.places.PlacesServiceStatus.OK;
-          const items = status === OK && results ? results.slice(0, 10) : [];
-          if (!items.length) {
-            done++;
-            if (done === CATEGORIES.length) { placeMarkers(lat, lng, result); setPlaces({...result}); setLoading(false); }
-            return;
-          }
-          let dd = 0;
-          items.forEach(place => {
-            service.getDetails({
-              placeId: place.place_id,
-              fields: ["name","formatted_phone_number","international_phone_number","geometry","vicinity","rating","user_ratings_total","opening_hours","place_id"],
-            }, (detail, ds) => {
-              result[cat.id].push(ds === OK && detail ? detail : place);
-              dd++;
-              if (dd === items.length) {
-                result[cat.id].sort((a,b) =>
-                  getDistance(lat,lng,a.geometry.location.lat(),a.geometry.location.lng()) -
-                  getDistance(lat,lng,b.geometry.location.lat(),b.geometry.location.lng())
-                );
-                done++;
-                if (done === CATEGORIES.length) { placeMarkers(lat, lng, result); setPlaces({...result}); setLoading(false); }
-              }
-            });
-          });
+      // Postos: busca só por tipo, sem keyword, para retornar todos os cadastrados
+      const searchParams = {
+        location: center,
+        radius: 5000,
+        type: cat.type,
+        ...(cat.keyword && { keyword: cat.keyword }),
+      };
+
+      service.nearbySearch(searchParams, (results, status) => {
+        const OK = window.google.maps.places.PlacesServiceStatus.OK;
+        const items = status === OK && results ? results.slice(0, 10) : [];
+        if (!items.length) {
+          done++;
+          if (done === CATEGORIES.length) { placeMarkers(lat, lng, result); setPlaces({...result}); setLoading(false); }
+          return;
         }
-      );
+        let dd = 0;
+        items.forEach(place => {
+          service.getDetails({
+            placeId: place.place_id,
+            fields: ["name","formatted_phone_number","international_phone_number","geometry","vicinity","rating","user_ratings_total","opening_hours","place_id"],
+          }, (detail, ds) => {
+            result[cat.id].push(ds === OK && detail ? detail : place);
+            dd++;
+            if (dd === items.length) {
+              result[cat.id].sort((a,b) =>
+                getDistance(lat,lng,a.geometry.location.lat(),a.geometry.location.lng()) -
+                getDistance(lat,lng,b.geometry.location.lat(),b.geometry.location.lng())
+              );
+              done++;
+              if (done === CATEGORIES.length) { placeMarkers(lat, lng, result); setPlaces({...result}); setLoading(false); }
+            }
+          });
+        });
+      });
     });
   }, [mapsReady, placeMarkers]);
 
@@ -338,8 +339,6 @@ export default function App() {
                 </div>
               )}
             </div>
-
-            {/* FILTRO 24H */}
             {searched && !loading && (
               <button onClick={() => setOnly24h(v => !v)} style={{
                 display: "flex", alignItems: "center", gap: 6,
@@ -384,7 +383,7 @@ export default function App() {
             {!loading && searched && activePlaces.length === 0 && (
               <div style={{
                 background: "#2a2a3a", borderRadius: 16, padding: "28px 20px",
-                display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: 12,
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
               }}>
                 <span style={{ fontSize: 32 }}>🔍</span>
                 <div style={{ fontSize: 14, color: "#888", textAlign: "center", lineHeight: 1.6 }}>
@@ -410,7 +409,6 @@ export default function App() {
                   animation: `fadeUp 0.3s ease ${i*0.04}s both`,
                   position: "relative", overflow: "hidden",
                 }}>
-                  {/* Borda lateral 24h */}
                   {h24 && (
                     <div style={{
                       position: "absolute", left: 0, top: 0, bottom: 0,
@@ -418,7 +416,6 @@ export default function App() {
                     }}/>
                   )}
 
-                  {/* Header */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, flex: 1, paddingRight: 10 }}>
                       {place.name}
@@ -438,9 +435,7 @@ export default function App() {
                             fontSize: 10, fontWeight: 800, color: "#00C896",
                             background: "rgba(0,200,150,0.12)", padding: "2px 7px", borderRadius: 99,
                             border: "1px solid rgba(0,200,150,0.3)",
-                          }}>
-                            24H
-                          </span>
+                          }}>24H</span>
                         )}
                         {isOpen !== null && (
                           <span style={{ fontSize: 11, color: isOpen ? "#4CAF50" : "#E84040", fontWeight: 600, whiteSpace: "nowrap" }}>
@@ -451,7 +446,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Estrelas */}
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                     <Stars rating={place.rating} />
                     {place.user_ratings_total && (
@@ -459,7 +453,6 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Endereço */}
                   {place.vicinity && (
                     <div style={{ fontSize: 12, color: "#666", marginBottom: phone ? 6 : 12, display: "flex", gap: 5, alignItems: "flex-start", lineHeight: 1.5 }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2.5" style={{ marginTop: 1, flexShrink: 0 }}>
@@ -469,7 +462,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Telefone */}
                   {phone && (
                     <div style={{ fontSize: 12, color: "#888", marginBottom: 12, display: "flex", gap: 5, alignItems: "center" }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2.5">
@@ -479,7 +471,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Botões */}
                   <div style={{ display: "flex", gap: 8 }}>
                     {phone && (
                       <a href={waUrl || `tel:${phone}`} style={{
@@ -518,7 +509,6 @@ export default function App() {
                 </div>
               );
             })}
-
             <div style={{ height: 16 }} />
           </div>
         </div>
@@ -531,10 +521,10 @@ export default function App() {
           padding: "10px 0 28px", display: "flex", zIndex: 100,
         }}>
           {[
-            { id: "map", label: "Mapa", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg> },
-            { id: "routes", label: "Rotas", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M6 15V9a6 6 0 0 1 12 0v9"/></svg> },
-            { id: "maint", label: "Manutenção", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> },
-            { id: "profile", label: "Perfil", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
+            { id: "map",     label: "Mapa",        icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg> },
+            { id: "routes",  label: "Rotas",       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M6 15V9a6 6 0 0 1 12 0v9"/></svg> },
+            { id: "maint",   label: "Manutenção",  icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> },
+            { id: "profile", label: "Perfil",      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
           ].map(item => {
             const active = activeNav === item.id;
             return (
