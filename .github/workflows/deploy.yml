@@ -3,6 +3,7 @@ name: Deploy MiMoto to GitHub Pages
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -30,10 +31,13 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm install
 
       - name: Build
-        run: npm run build
+        run: npx vite build
+
+      - name: List dist contents
+        run: ls -la dist/
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
