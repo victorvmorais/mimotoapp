@@ -1,0 +1,448 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+
+const GOOGLE_MAPS_API_KEY = "AIzaSyAWK94SwutfM0M6dxukmrUTQCfg4a83ltE";
+
+const CATEGORIES = [
+  { id: "tire", label: "Borracharias", icon: "🔧", type: "car_repair", keyword: "borracharia", color: "#E84040" },
+  { id: "gas",  label: "Postos de Gasolina", icon: "⛽", type: "gas_station", keyword: "posto gasolina", color: "#F07D1A" },
+];
+
+function getDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function distLabel(m) { return m < 1000 ? `${Math.round(m)}m` : `${(m/1000).toFixed(1)}km`; }
+function getWA(phone) {
+  if (!phone) return null;
+  const d = phone.replace(/\D/g,"");
+  if (d.length < 10 || d.length > 13) return null;
+  return `https://wa.me/${d.startsWith("55") ? d : "55"+d}`;
+}
+
+function Stars({ rating }) {
+  if (!rating) return null;
+  return (
+    <span style={{ color: "#F5A623", fontSize: 11 }}>
+      {"★".repeat(Math.round(rating))}{"☆".repeat(5-Math.round(rating))}
+      <span style={{ color: "#888", marginLeft: 3, fontSize: 11 }}>{rating.toFixed(1)}</span>
+    </span>
+  );
+}
+
+function loadMaps() {
+  return new Promise(resolve => {
+    if (window.google?.maps?.places) return resolve();
+    const s = document.createElement("script");
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+    s.onload = resolve;
+    document.head.appendChild(s);
+  });
+}
+
+export default function App() {
+  const mapRef = useRef(null);
+  const mapInstance = useRef(null);
+  const markersRef = useRef([]);
+  const circleRef = useRef(null);
+
+  const [location, setLocation] = useState(null);
+  const [places, setPlaces] = useState({ tire: [], gas: [] });
+  const [activeTab, setActiveTab] = useState("tire");
+  const [loading, setLoading] = useState(false);
+  const [mapsReady, setMapsReady] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [activeNav, setActiveNav] = useState("map");
+  const [search, setSearch] = useState("");
+  const [locError, setLocError] = useState(null);
+
+  useEffect(() => {
+    loadMaps().then(() => setMapsReady(true));
+  }, []);
+
+  useEffect(() => {
+    if (mapsReady && mapRef.current && !mapInstance.current) {
+      mapInstance.current = new window.google.maps.Map(mapRef.current, {
+        zoom: 14,
+        center: { lat: -3.7319, lng: -38.5267 },
+        disableDefaultUI: true,
+        zoomControl: true,
+        styles: [
+          { elementType: "geometry", stylers: [{ color: "#1e1e2e" }] },
+          { elementType: "labels.text.fill", stylers: [{ color: "#aaaaaa" }] },
+          { elementType: "labels.text.stroke", stylers: [{ color: "#1e1e2e" }] },
+          { featureType: "road", elementType: "geometry", stylers: [{ color: "#2c2c3e" }] },
+          { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#373750" }] },
+          { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#454560" }] },
+          { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] },
+          { featureType: "poi", elementType: "geometry", stylers: [{ color: "#252535" }] },
+          { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2f3040" }] },
+        ],
+      });
+    }
+  }, [mapsReady]);
+
+  const clearMarkers = () => {
+    markersRef.current.forEach(m => m.setMap(null));
+    markersRef.current = [];
+    if (circleRef.current) { circleRef.current.setMap(null); circleRef.current = null; }
+  };
+
+  const placeMarkers = useCallback((lat, lng, allPlaces) => {
+    if (!mapInstance.current) return;
+    clearMarkers();
+
+    new window.google.maps.Marker({
+      position: { lat, lng },
+      map: mapInstance.current,
+      icon: {
+        path: window.google.maps.SymbolPath.CIRCLE,
+        scale: 10,
+        fillColor: "#4A90E2",
+        fillOpacity: 1,
+        strokeColor: "#fff",
+        strokeWeight: 3,
+      },
+      zIndex: 10,
+    });
+
+    circleRef.current = new window.google.maps.Circle({
+      strokeColor: "#4A90E2", strokeOpacity: 0.3, strokeWeight: 1,
+      fillColor: "#4A90E2", fillOpacity: 0.08,
+      map: mapInstance.current, center: { lat, lng }, radius: 800,
+    });
+
+    CATEGORIES.forEach(cat => {
+      (allPlaces[cat.id] || []).forEach(place => {
+        const plat = place.geometry.location.lat();
+        const plng = place.geometry.location.lng();
+        const dist = distLabel(getDistance(lat, lng, plat, plng));
+        const isOpen = place.opening_hours?.isOpen?.() ?? null;
+
+        const infoContent = `<div style="background:#2a2a3a;border-radius:8px;padding:8px 10px;color:#fff;font-family:sans-serif;min-width:120px;"><div style="font-weight:700;font-size:13px">${place.name}</div><div style="font-size:11px;color:#aaa;margin-top:2px">${isOpen !== null ? (isOpen ? "Aberto" : "Fechado") : ""} · ${dist}</div></div>`;
+        const infoWindow = new window.google.maps.InfoWindow({ content: infoContent });
+
+        const marker = new window.google.maps.Marker({
+          position: { lat: plat, lng: plng },
+          map: mapInstance.current,
+          title: place.name,
+          icon: {
+            url: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="36" height="44" viewBox="0 0 36 44"><path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 26 18 26s18-12.5 18-26C36 8.06 27.94 0 18 0z" fill="${cat.color}"/><circle cx="18" cy="18" r="10" fill="rgba(0,0,0,0.25)"/><text x="18" y="22" text-anchor="middle" font-size="12" fill="white">${cat.id === "tire" ? "🔧" : "⛽"}</text></svg>`)}`,
+            scaledSize: new window.google.maps.Size(32, 40),
+            anchor: new window.google.maps.Point(16, 40),
+          },
+        });
+        marker.addListener("click", () => infoWindow.open(mapInstance.current, marker));
+        markersRef.current.push(marker);
+      });
+    });
+
+    mapInstance.current.panTo({ lat, lng });
+    mapInstance.current.setZoom(14);
+  }, []);
+
+  const fetchPlaces = useCallback(async (lat, lng) => {
+    if (!mapsReady) return;
+    setLoading(true);
+    setSearched(true);
+    setLocError(null);
+    const map = new window.google.maps.Map(document.createElement("div"));
+    const service = new window.google.maps.places.PlacesService(map);
+    const center = new window.google.maps.LatLng(lat, lng);
+    const result = { tire: [], gas: [] };
+    let done = 0;
+
+    CATEGORIES.forEach(cat => {
+      service.nearbySearch({ location: center, radius: 5000, type: cat.type, keyword: cat.keyword }, (results, status) => {
+        const OK = window.google.maps.places.PlacesServiceStatus.OK;
+        const items = status === OK && results ? results.slice(0, 8) : [];
+        if (!items.length) {
+          done++;
+          if (done === CATEGORIES.length) { placeMarkers(lat, lng, result); setPlaces({...result}); setLoading(false); }
+          return;
+        }
+        let dd = 0;
+        items.forEach(place => {
+          service.getDetails({
+            placeId: place.place_id,
+            fields: ["name","formatted_phone_number","international_phone_number","geometry","vicinity","rating","user_ratings_total","opening_hours"],
+          }, (detail, ds) => {
+            result[cat.id].push(ds === OK && detail ? detail : place);
+            dd++;
+            if (dd === items.length) {
+              result[cat.id].sort((a,b) =>
+                getDistance(lat,lng,a.geometry.location.lat(),a.geometry.location.lng()) -
+                getDistance(lat,lng,b.geometry.location.lat(),b.geometry.location.lng())
+              );
+              done++;
+              if (done === CATEGORIES.length) { placeMarkers(lat, lng, result); setPlaces({...result}); setLoading(false); }
+            }
+          });
+        });
+      });
+    });
+  }, [mapsReady, placeMarkers]);
+
+  const handleGPS = () => {
+    setLocError(null);
+    if (!navigator.geolocation) { setLocError("Geolocalização não suportada."); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setLocation(loc);
+        fetchPlaces(loc.lat, loc.lng);
+      },
+      () => setLocError("Permissão de localização negada. Verifique as configurações.")
+    );
+  };
+
+  const activePlaces = (places[activeTab] || []).filter(p =>
+    !search || p.name.toLowerCase().includes(search.toLowerCase())
+  );
+  const activeCat = CATEGORIES.find(c => c.id === activeTab);
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body, #root { height: 100%; }
+        body { background: #1a1a2a; font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; overscroll-behavior: none; }
+        .gm-style-iw { background: transparent !important; box-shadow: none !important; padding: 0 !important; }
+        .gm-style-iw-d { overflow: visible !important; }
+        .gm-style-iw-t::after { display: none !important; }
+        .gm-ui-hover-effect { display: none !important; }
+        ::-webkit-scrollbar { height: 3px; width: 3px; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+        input::placeholder { color: #555; }
+      `}</style>
+
+      <div style={{
+        width: "100%", maxWidth: 480, margin: "0 auto",
+        height: "100dvh", background: "#1a1a2a",
+        display: "flex", flexDirection: "column",
+        fontFamily: "'Inter', sans-serif", overflow: "hidden",
+      }}>
+
+        {/* TOP BAR */}
+        <div style={{ background: "#E8831A", padding: "48px 16px 12px", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 22 }}>🏍️</span>
+              <span style={{ fontSize: 22, fontWeight: 800, color: "#fff", letterSpacing: -0.5 }}>
+                Mi<span style={{ color: "#1a1a2a" }}>Moto</span>
+              </span>
+            </div>
+            <div style={{
+              width: 36, height: 36, borderRadius: "50%",
+              background: "rgba(0,0,0,0.2)", border: "2px solid rgba(255,255,255,0.3)",
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
+            }}>👤</div>
+          </div>
+        </div>
+
+        {/* GREETING + SEARCH */}
+        <div style={{ background: "#1a1a2a", padding: "16px 16px 12px", flexShrink: 0 }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 12 }}>Olá, Victor!</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#2a2a3a", borderRadius: 12, padding: "10px 14px" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2.5">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Pesquisar locais..."
+              style={{ background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: 14, flex: 1, fontFamily: "'Inter', sans-serif" }}
+            />
+          </div>
+        </div>
+
+        {/* CATEGORY TABS */}
+        <div style={{ padding: "0 16px 12px", flexShrink: 0, display: "flex", gap: 10 }}>
+          {CATEGORIES.map(cat => {
+            const active = activeTab === cat.id;
+            return (
+              <button key={cat.id} onClick={() => setActiveTab(cat.id)} style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "8px 16px", borderRadius: 99, border: "none", cursor: "pointer",
+                background: active ? cat.color : "#2a2a3a",
+                color: active ? "#fff" : "#888",
+                fontSize: 13, fontWeight: 600, fontFamily: "'Inter', sans-serif",
+                boxShadow: active ? `0 4px 12px ${cat.color}55` : "none",
+                transition: "all 0.15s",
+              }}>
+                <span style={{ fontSize: 14 }}>{cat.icon}</span>
+                {cat.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* MAP */}
+        <div style={{ position: "relative", height: 260, flexShrink: 0 }}>
+          <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
+
+          {locError && (
+            <div style={{
+              position: "absolute", top: 10, left: 12, right: 12,
+              background: "rgba(232,64,64,0.9)", borderRadius: 10,
+              padding: "8px 12px", fontSize: 12, color: "#fff", fontWeight: 500,
+            }}>
+              {locError}
+            </div>
+          )}
+
+          <button onClick={handleGPS} disabled={loading} style={{
+            position: "absolute", bottom: 12, right: 12,
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "8px 14px", borderRadius: 99, border: "none",
+            background: "#1a1a2a", color: loading ? "#888" : "#4A90E2",
+            fontSize: 13, fontWeight: 700, fontFamily: "'Inter', sans-serif",
+            cursor: loading ? "not-allowed" : "pointer",
+            boxShadow: "0 2px 12px rgba(0,0,0,0.6)",
+          }}>
+            {loading ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: "spin 0.8s linear infinite" }}>
+                <circle cx="12" cy="12" r="10" strokeOpacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10"/>
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>
+              </svg>
+            )}
+            GPS
+          </button>
+        </div>
+
+        {/* BOTTOM SHEET */}
+        <div style={{ flex: 1, background: "#1a1a2a", borderTop: "1px solid #2a2a3a", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ padding: "14px 16px 10px", flexShrink: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>Serviços Próximos</div>
+            {searched && !loading && (
+              <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>
+                {activePlaces.length} resultado{activePlaces.length !== 1 ? "s" : ""} encontrado{activePlaces.length !== 1 ? "s" : ""}
+              </div>
+            )}
+          </div>
+
+          <div style={{ overflowX: "auto", overflowY: "hidden", flexShrink: 0, paddingBottom: 8 }}>
+            <div style={{ display: "flex", gap: 12, padding: "0 16px 4px", width: "max-content" }}>
+
+              {!searched && !loading && (
+                <div style={{ width: 220, background: "#2a2a3a", borderRadius: 16, padding: "20px 16px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 130 }}>
+                  <span style={{ fontSize: 28 }}>📍</span>
+                  <div style={{ fontSize: 13, color: "#888", textAlign: "center", lineHeight: 1.5 }}>
+                    Toque em GPS para encontrar serviços próximos
+                  </div>
+                </div>
+              )}
+
+              {loading && [1,2,3].map(i => (
+                <div key={i} style={{ width: 200, background: "#2a2a3a", borderRadius: 16, padding: 14, minHeight: 130, opacity: 0.4 }}>
+                  <div style={{ height: 13, background: "#3a3a4a", borderRadius: 6, marginBottom: 10 }}/>
+                  <div style={{ height: 10, background: "#3a3a4a", borderRadius: 6, width: "70%", marginBottom: 8 }}/>
+                  <div style={{ height: 10, background: "#3a3a4a", borderRadius: 6, width: "50%", marginBottom: 16 }}/>
+                  <div style={{ height: 32, background: "#3a3a4a", borderRadius: 8 }}/>
+                </div>
+              ))}
+
+              {!loading && activePlaces.map((place, i) => {
+                const dist = location
+                  ? distLabel(getDistance(location.lat, location.lng, place.geometry.location.lat(), place.geometry.location.lng()))
+                  : null;
+                const phone = place.formatted_phone_number || place.international_phone_number;
+                const waUrl = getWA(phone);
+                const isOpen = place.opening_hours?.isOpen?.() ?? null;
+                const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${place.geometry.location.lat()},${place.geometry.location.lng()}`;
+
+                return (
+                  <div key={place.place_id || i} style={{
+                    width: 200, background: "#2a2a3a", borderRadius: 16, padding: 14, flexShrink: 0,
+                    animation: `fadeUp 0.3s ease ${i*0.05}s both`, border: "1px solid #3a3a4a",
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 5 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", lineHeight: 1.3, flex: 1, paddingRight: 6 }}>
+                        {place.name}
+                      </div>
+                      {dist && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: activeCat?.color, background: `${activeCat?.color}22`, padding: "2px 7px", borderRadius: 99, whiteSpace: "nowrap" }}>
+                          {dist}
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                      <Stars rating={place.rating} />
+                      {place.user_ratings_total && <span style={{ fontSize: 10, color: "#666" }}>{place.user_ratings_total} aval.</span>}
+                    </div>
+
+                    {isOpen !== null && (
+                      <div style={{ fontSize: 11, color: isOpen ? "#4CAF50" : "#E84040", marginBottom: 8, fontWeight: 500 }}>
+                        {isOpen ? "● Aberto agora" : "● Fechado"}
+                      </div>
+                    )}
+
+                    {place.vicinity && (
+                      <div style={{ fontSize: 11, color: "#666", marginBottom: 10, lineHeight: 1.4 }}>
+                        {place.vicinity}
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {phone && (
+                        <a href={waUrl || `tel:${phone}`} style={{
+                          flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                          padding: "8px 0", borderRadius: 8, background: "#3a3a4a", color: "#ccc",
+                          textDecoration: "none", fontSize: 11, fontWeight: 600,
+                        }}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.6 3.39 2 2 0 0 1 3.6 1.21h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.81a16 16 0 0 0 6 6l.95-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.7 16.1z"/>
+                          </svg>
+                          Ligar
+                        </a>
+                      )}
+                      <a href={mapsUrl} target="_blank" rel="noreferrer" style={{
+                        flex: phone ? 1.3 : 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                        padding: "8px 0", borderRadius: 8, background: activeCat?.color, color: "#fff",
+                        textDecoration: "none", fontSize: 11, fontWeight: 600,
+                      }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+                        </svg>
+                        Traçar Rota
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ flex: 1 }}/>
+        </div>
+
+        {/* BOTTOM NAV */}
+        <div style={{ background: "#111118", borderTop: "1px solid #2a2a3a", padding: "10px 0 28px", display: "flex", flexShrink: 0 }}>
+          {[
+            { id: "map", label: "Mapa", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg> },
+            { id: "routes", label: "Rotas", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M6 15V9a6 6 0 0 1 12 0v9"/></svg> },
+            { id: "maint", label: "Manutenção", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> },
+            { id: "profile", label: "Perfil", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
+          ].map(item => {
+            const active = activeNav === item.id;
+            return (
+              <button key={item.id} onClick={() => setActiveNav(item.id)} style={{
+                flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                background: "transparent", border: "none", cursor: "pointer",
+                color: active ? "#E8831A" : "#555", fontFamily: "'Inter', sans-serif",
+              }}>
+                {item.icon}
+                <span style={{ fontSize: 10, fontWeight: active ? 700 : 500 }}>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
