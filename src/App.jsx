@@ -25,7 +25,7 @@ function getWA(phone) {
 function Stars({ rating }) {
   if (!rating) return null;
   return (
-    <span style={{ color: "#F5A623", fontSize: 11 }}>
+    <span style={{ color: "#F5A623", fontSize: 12 }}>
       {"★".repeat(Math.round(rating))}{"☆".repeat(5-Math.round(rating))}
       <span style={{ color: "#888", marginLeft: 3, fontSize: 11 }}>{rating.toFixed(1)}</span>
     </span>
@@ -78,7 +78,6 @@ export default function App() {
           { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#454560" }] },
           { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] },
           { featureType: "poi", elementType: "geometry", stylers: [{ color: "#252535" }] },
-          { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2f3040" }] },
         ],
       });
     }
@@ -120,10 +119,8 @@ export default function App() {
         const plng = place.geometry.location.lng();
         const dist = distLabel(getDistance(lat, lng, plat, plng));
         const isOpen = place.opening_hours?.isOpen?.() ?? null;
-
         const infoContent = `<div style="background:#2a2a3a;border-radius:8px;padding:8px 10px;color:#fff;font-family:sans-serif;min-width:120px;"><div style="font-weight:700;font-size:13px">${place.name}</div><div style="font-size:11px;color:#aaa;margin-top:2px">${isOpen !== null ? (isOpen ? "Aberto" : "Fechado") : ""} · ${dist}</div></div>`;
         const infoWindow = new window.google.maps.InfoWindow({ content: infoContent });
-
         const marker = new window.google.maps.Marker({
           position: { lat: plat, lng: plng },
           map: mapInstance.current,
@@ -194,7 +191,7 @@ export default function App() {
         setLocation(loc);
         fetchPlaces(loc.lat, loc.lng);
       },
-      () => setLocError("Permissão de localização negada. Verifique as configurações.")
+      () => setLocError("Permissão negada. Verifique as configurações.")
     );
   };
 
@@ -208,27 +205,38 @@ export default function App() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body, #root { height: 100%; }
-        body { background: #1a1a2a; font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; overscroll-behavior: none; }
+        html { height: 100%; }
+        body {
+          background: #1a1a2a;
+          font-family: 'Inter', sans-serif;
+          -webkit-font-smoothing: antialiased;
+          height: 100%;
+          overscroll-behavior-y: none;
+        }
+        #root { height: 100%; }
         .gm-style-iw { background: transparent !important; box-shadow: none !important; padding: 0 !important; }
         .gm-style-iw-d { overflow: visible !important; }
         .gm-style-iw-t::after { display: none !important; }
         .gm-ui-hover-effect { display: none !important; }
-        ::-webkit-scrollbar { height: 3px; width: 3px; }
-        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
         input::placeholder { color: #555; }
+        .services-scroll { -webkit-overflow-scrolling: touch; }
       `}</style>
 
       <div style={{
-        width: "100%", maxWidth: 480, margin: "0 auto",
-        height: "100dvh", background: "#1a1a2a",
-        display: "flex", flexDirection: "column",
-        fontFamily: "'Inter', sans-serif", overflow: "hidden",
+        width: "100%",
+        maxWidth: 480,
+        margin: "0 auto",
+        height: "100dvh",
+        background: "#1a1a2a",
+        display: "flex",
+        flexDirection: "column",
+        fontFamily: "'Inter', sans-serif",
+        position: "relative",
       }}>
 
-        {/* TOP BAR */}
+        {/* TOP BAR - fixo */}
         <div style={{ background: "#E8831A", padding: "48px 16px 12px", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -245,184 +253,230 @@ export default function App() {
           </div>
         </div>
 
-        {/* GREETING + SEARCH */}
-        <div style={{ background: "#1a1a2a", padding: "16px 16px 12px", flexShrink: 0 }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 12 }}>Olá, Victor!</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#2a2a3a", borderRadius: 12, padding: "10px 14px" }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2.5">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Pesquisar locais..."
-              style={{ background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: 14, flex: 1, fontFamily: "'Inter', sans-serif" }}
-            />
-          </div>
-        </div>
+        {/* CONTEÚDO SCROLLÁVEL */}
+        <div className="services-scroll" style={{
+          flex: 1,
+          overflowY: "auto",
+          overflowX: "hidden",
+          paddingBottom: 80, // espaço para o nav bar
+        }}>
 
-        {/* CATEGORY TABS */}
-        <div style={{ padding: "0 16px 12px", flexShrink: 0, display: "flex", gap: 10 }}>
-          {CATEGORIES.map(cat => {
-            const active = activeTab === cat.id;
-            return (
-              <button key={cat.id} onClick={() => setActiveTab(cat.id)} style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "8px 16px", borderRadius: 99, border: "none", cursor: "pointer",
-                background: active ? cat.color : "#2a2a3a",
-                color: active ? "#fff" : "#888",
-                fontSize: 13, fontWeight: 600, fontFamily: "'Inter', sans-serif",
-                boxShadow: active ? `0 4px 12px ${cat.color}55` : "none",
-                transition: "all 0.15s",
-              }}>
-                <span style={{ fontSize: 14 }}>{cat.icon}</span>
-                {cat.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* MAP */}
-        <div style={{ position: "relative", height: 260, flexShrink: 0 }}>
-          <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
-
-          {locError && (
-            <div style={{
-              position: "absolute", top: 10, left: 12, right: 12,
-              background: "rgba(232,64,64,0.9)", borderRadius: 10,
-              padding: "8px 12px", fontSize: 12, color: "#fff", fontWeight: 500,
-            }}>
-              {locError}
+          {/* GREETING + SEARCH */}
+          <div style={{ background: "#1a1a2a", padding: "16px 16px 12px" }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 12 }}>Olá, Victor!</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#2a2a3a", borderRadius: 12, padding: "10px 14px" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2.5">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Pesquisar locais..."
+                style={{ background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: 14, flex: 1, fontFamily: "'Inter', sans-serif" }}
+              />
             </div>
-          )}
+          </div>
 
-          <button onClick={handleGPS} disabled={loading} style={{
-            position: "absolute", bottom: 12, right: 12,
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "8px 14px", borderRadius: 99, border: "none",
-            background: "#1a1a2a", color: loading ? "#888" : "#4A90E2",
-            fontSize: 13, fontWeight: 700, fontFamily: "'Inter', sans-serif",
-            cursor: loading ? "not-allowed" : "pointer",
-            boxShadow: "0 2px 12px rgba(0,0,0,0.6)",
-          }}>
-            {loading ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: "spin 0.8s linear infinite" }}>
-                <circle cx="12" cy="12" r="10" strokeOpacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10"/>
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>
-              </svg>
+          {/* CATEGORY TABS */}
+          <div style={{ padding: "0 16px 12px", display: "flex", gap: 10 }}>
+            {CATEGORIES.map(cat => {
+              const active = activeTab === cat.id;
+              return (
+                <button key={cat.id} onClick={() => setActiveTab(cat.id)} style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "8px 16px", borderRadius: 99, border: "none", cursor: "pointer",
+                  background: active ? cat.color : "#2a2a3a",
+                  color: active ? "#fff" : "#888",
+                  fontSize: 13, fontWeight: 600, fontFamily: "'Inter', sans-serif",
+                  boxShadow: active ? `0 4px 12px ${cat.color}55` : "none",
+                  transition: "all 0.15s",
+                  WebkitTapHighlightColor: "transparent",
+                }}>
+                  <span style={{ fontSize: 14 }}>{cat.icon}</span>
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* MAPA */}
+          <div style={{ position: "relative", height: 240, flexShrink: 0 }}>
+            <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
+
+            {locError && (
+              <div style={{
+                position: "absolute", top: 10, left: 12, right: 12,
+                background: "rgba(232,64,64,0.9)", borderRadius: 10,
+                padding: "8px 12px", fontSize: 12, color: "#fff", fontWeight: 500,
+              }}>
+                {locError}
+              </div>
             )}
-            GPS
-          </button>
-        </div>
 
-        {/* BOTTOM SHEET */}
-        <div style={{ flex: 1, background: "#1a1a2a", borderTop: "1px solid #2a2a3a", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ padding: "14px 16px 10px", flexShrink: 0 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>Serviços Próximos</div>
+            <button onClick={handleGPS} disabled={loading} style={{
+              position: "absolute", bottom: 12, right: 12,
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "8px 14px", borderRadius: 99, border: "none",
+              background: "#1a1a2a", color: loading ? "#888" : "#4A90E2",
+              fontSize: 13, fontWeight: 700, fontFamily: "'Inter', sans-serif",
+              cursor: loading ? "not-allowed" : "pointer",
+              boxShadow: "0 2px 12px rgba(0,0,0,0.6)",
+              WebkitTapHighlightColor: "transparent",
+            }}>
+              {loading ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                  style={{ animation: "spin 0.8s linear infinite" }}>
+                  <circle cx="12" cy="12" r="10" strokeOpacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10"/>
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>
+                </svg>
+              )}
+              GPS
+            </button>
+          </div>
+
+          {/* SERVIÇOS PRÓXIMOS */}
+          <div style={{ padding: "16px 16px 0" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 4 }}>
+              Serviços Próximos
+            </div>
             {searched && !loading && (
-              <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>
+              <div style={{ fontSize: 12, color: "#555", marginBottom: 14 }}>
                 {activePlaces.length} resultado{activePlaces.length !== 1 ? "s" : ""} encontrado{activePlaces.length !== 1 ? "s" : ""}
               </div>
             )}
           </div>
 
-          <div style={{ overflowX: "auto", overflowY: "hidden", flexShrink: 0, paddingBottom: 8 }}>
-            <div style={{ display: "flex", gap: 12, padding: "0 16px 4px", width: "max-content" }}>
+          {/* CARDS EM LISTA VERTICAL */}
+          <div style={{ padding: "0 16px" }}>
 
-              {!searched && !loading && (
-                <div style={{ width: 220, background: "#2a2a3a", borderRadius: 16, padding: "20px 16px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 130 }}>
-                  <span style={{ fontSize: 28 }}>📍</span>
-                  <div style={{ fontSize: 13, color: "#888", textAlign: "center", lineHeight: 1.5 }}>
-                    Toque em GPS para encontrar serviços próximos
-                  </div>
+            {!searched && !loading && (
+              <div style={{
+                background: "#2a2a3a", borderRadius: 16, padding: "28px 20px",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: 12,
+              }}>
+                <span style={{ fontSize: 36 }}>📍</span>
+                <div style={{ fontSize: 14, color: "#888", textAlign: "center", lineHeight: 1.6 }}>
+                  Toque em <strong style={{ color: "#4A90E2" }}>GPS</strong> no mapa para encontrar serviços próximos
                 </div>
-              )}
+              </div>
+            )}
 
-              {loading && [1,2,3].map(i => (
-                <div key={i} style={{ width: 200, background: "#2a2a3a", borderRadius: 16, padding: 14, minHeight: 130, opacity: 0.4 }}>
-                  <div style={{ height: 13, background: "#3a3a4a", borderRadius: 6, marginBottom: 10 }}/>
-                  <div style={{ height: 10, background: "#3a3a4a", borderRadius: 6, width: "70%", marginBottom: 8 }}/>
-                  <div style={{ height: 10, background: "#3a3a4a", borderRadius: 6, width: "50%", marginBottom: 16 }}/>
-                  <div style={{ height: 32, background: "#3a3a4a", borderRadius: 8 }}/>
-                </div>
-              ))}
+            {loading && [1,2,3].map(i => (
+              <div key={i} style={{
+                background: "#2a2a3a", borderRadius: 16, padding: 16, marginBottom: 12, opacity: 0.5,
+              }}>
+                <div style={{ height: 14, background: "#3a3a4a", borderRadius: 6, marginBottom: 10, width: "60%" }}/>
+                <div style={{ height: 10, background: "#3a3a4a", borderRadius: 6, marginBottom: 8, width: "40%" }}/>
+                <div style={{ height: 10, background: "#3a3a4a", borderRadius: 6, marginBottom: 16, width: "80%" }}/>
+                <div style={{ height: 36, background: "#3a3a4a", borderRadius: 10 }}/>
+              </div>
+            ))}
 
-              {!loading && activePlaces.map((place, i) => {
-                const dist = location
-                  ? distLabel(getDistance(location.lat, location.lng, place.geometry.location.lat(), place.geometry.location.lng()))
-                  : null;
-                const phone = place.formatted_phone_number || place.international_phone_number;
-                const waUrl = getWA(phone);
-                const isOpen = place.opening_hours?.isOpen?.() ?? null;
-                const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${place.geometry.location.lat()},${place.geometry.location.lng()}`;
+            {!loading && activePlaces.map((place, i) => {
+              const dist = location
+                ? distLabel(getDistance(location.lat, location.lng, place.geometry.location.lat(), place.geometry.location.lng()))
+                : null;
+              const phone = place.formatted_phone_number || place.international_phone_number;
+              const waUrl = getWA(phone);
+              const isOpen = place.opening_hours?.isOpen?.() ?? null;
+              const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${place.geometry.location.lat()},${place.geometry.location.lng()}`;
 
-                return (
-                  <div key={place.place_id || i} style={{
-                    width: 200, background: "#2a2a3a", borderRadius: 16, padding: 14, flexShrink: 0,
-                    animation: `fadeUp 0.3s ease ${i*0.05}s both`, border: "1px solid #3a3a4a",
-                  }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 5 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", lineHeight: 1.3, flex: 1, paddingRight: 6 }}>
-                        {place.name}
-                      </div>
+              return (
+                <div key={place.place_id || i} style={{
+                  background: "#2a2a3a", borderRadius: 16, padding: 16, marginBottom: 12,
+                  border: "1px solid #3a3a4a",
+                  animation: `fadeUp 0.3s ease ${i*0.04}s both`,
+                }}>
+                  {/* Header do card */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, flex: 1, paddingRight: 10 }}>
+                      {place.name}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
                       {dist && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: activeCat?.color, background: `${activeCat?.color}22`, padding: "2px 7px", borderRadius: 99, whiteSpace: "nowrap" }}>
+                        <span style={{
+                          fontSize: 12, fontWeight: 700, color: activeCat?.color,
+                          background: `${activeCat?.color}22`, padding: "3px 9px", borderRadius: 99, whiteSpace: "nowrap",
+                        }}>
                           {dist}
                         </span>
                       )}
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                      <Stars rating={place.rating} />
-                      {place.user_ratings_total && <span style={{ fontSize: 10, color: "#666" }}>{place.user_ratings_total} aval.</span>}
-                    </div>
-
-                    {isOpen !== null && (
-                      <div style={{ fontSize: 11, color: isOpen ? "#4CAF50" : "#E84040", marginBottom: 8, fontWeight: 500 }}>
-                        {isOpen ? "● Aberto agora" : "● Fechado"}
-                      </div>
-                    )}
-
-                    {place.vicinity && (
-                      <div style={{ fontSize: 11, color: "#666", marginBottom: 10, lineHeight: 1.4 }}>
-                        {place.vicinity}
-                      </div>
-                    )}
-
-                    <div style={{ display: "flex", gap: 6 }}>
-                      {phone && (
-                        <a href={waUrl || `tel:${phone}`} style={{
-                          flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-                          padding: "8px 0", borderRadius: 8, background: "#3a3a4a", color: "#ccc",
-                          textDecoration: "none", fontSize: 11, fontWeight: 600,
-                        }}>
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.6 3.39 2 2 0 0 1 3.6 1.21h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.81a16 16 0 0 0 6 6l.95-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.7 16.1z"/>
-                          </svg>
-                          Ligar
-                        </a>
+                      {isOpen !== null && (
+                        <span style={{ fontSize: 11, color: isOpen ? "#4CAF50" : "#E84040", fontWeight: 600, whiteSpace: "nowrap" }}>
+                          {isOpen ? "● Aberto" : "● Fechado"}
+                        </span>
                       )}
-                      <a href={mapsUrl} target="_blank" rel="noreferrer" style={{
-                        flex: phone ? 1.3 : 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-                        padding: "8px 0", borderRadius: 8, background: activeCat?.color, color: "#fff",
-                        textDecoration: "none", fontSize: 11, fontWeight: 600,
-                      }}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <polygon points="3 11 22 2 13 21 11 13 3 11"/>
-                        </svg>
-                        Traçar Rota
-                      </a>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Estrelas */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                    <Stars rating={place.rating} />
+                    {place.user_ratings_total && (
+                      <span style={{ fontSize: 11, color: "#666" }}>{place.user_ratings_total} avaliações</span>
+                    )}
+                  </div>
+
+                  {/* Endereço */}
+                  {place.vicinity && (
+                    <div style={{ fontSize: 12, color: "#666", marginBottom: 12, display: "flex", gap: 5, alignItems: "flex-start", lineHeight: 1.5 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2.5" style={{ marginTop: 1, flexShrink: 0 }}>
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                      </svg>
+                      {place.vicinity}
+                    </div>
+                  )}
+
+                  {/* Botões */}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {phone && (
+                      <a href={waUrl || `tel:${phone}`} style={{
+                        flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        padding: "10px 0", borderRadius: 10, background: "#3a3a4a", color: "#ccc",
+                        textDecoration: "none", fontSize: 13, fontWeight: 600,
+                        WebkitTapHighlightColor: "transparent",
+                      }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.6 3.39 2 2 0 0 1 3.6 1.21h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.81a16 16 0 0 0 6 6l.95-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.7 16.1z"/>
+                        </svg>
+                        Ligar
+                      </a>
+                    )}
+                    <a href={mapsUrl} target="_blank" rel="noreferrer" style={{
+                      flex: phone ? 1.5 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                      padding: "10px 0", borderRadius: 10, background: activeCat?.color, color: "#fff",
+                      textDecoration: "none", fontSize: 13, fontWeight: 600,
+                      WebkitTapHighlightColor: "transparent",
+                    }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+                      </svg>
+                      Traçar Rota
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Espaço extra no fim */}
+            <div style={{ height: 16 }} />
           </div>
-          <div style={{ flex: 1 }}/>
         </div>
 
-        {/* BOTTOM NAV */}
-        <div style={{ background: "#111118", borderTop: "1px solid #2a2a3a", padding: "10px 0 28px", display: "flex", flexShrink: 0 }}>
+        {/* BOTTOM NAV - fixo */}
+        <div style={{
+          position: "fixed",
+          bottom: 0,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "100%",
+          maxWidth: 480,
+          background: "#111118",
+          borderTop: "1px solid #2a2a3a",
+          padding: "10px 0 28px",
+          display: "flex",
+          zIndex: 100,
+        }}>
           {[
             { id: "map", label: "Mapa", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg> },
             { id: "routes", label: "Rotas", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M6 15V9a6 6 0 0 1 12 0v9"/></svg> },
@@ -434,7 +488,9 @@ export default function App() {
               <button key={item.id} onClick={() => setActiveNav(item.id)} style={{
                 flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
                 background: "transparent", border: "none", cursor: "pointer",
-                color: active ? "#E8831A" : "#555", fontFamily: "'Inter', sans-serif",
+                color: active ? "#E8831A" : "#555",
+                fontFamily: "'Inter', sans-serif",
+                WebkitTapHighlightColor: "transparent",
               }}>
                 {item.icon}
                 <span style={{ fontSize: 10, fontWeight: active ? 700 : 500 }}>{item.label}</span>
