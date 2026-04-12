@@ -3,9 +3,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 const GOOGLE_MAPS_API_KEY = "AIzaSyAWK94SwutfM0M6dxukmrUTQCfg4a83ltE";
 
 const CATEGORIES = [
-  { id: "tire", label: "Borracharias",     icon: "🔧", type: "car_repair",  keyword: "borracharia",     color: "#E84040" },
-  { id: "gas",  label: "Postos",           icon: "⛽", type: "gas_station", keyword: null,              color: "#F07D1A" },
-  { id: "tow",  label: "Guinchos",         icon: "🚛", type: "car_repair",  keyword: "guincho reboque", color: "#4A90E2" },
+  { id: "tire", label: "Borracharias",    icon: "🔧", type: "car_repair",  keyword: "borracharia",     color: "#E84040" },
+  { id: "gas",  label: "Postos",          icon: "⛽", type: "gas_station", keyword: null,              color: "#F07D1A" },
+  { id: "tow",  label: "Guinchos",        icon: "🚛", type: "car_repair",  keyword: "guincho reboque", color: "#4A90E2" },
 ];
 
 function getDistance(lat1, lng1, lat2, lng2) {
@@ -53,6 +53,7 @@ export default function App() {
   const mapInstance = useRef(null);
   const markersRef = useRef([]);
   const circleRef = useRef(null);
+  const scrollRef = useRef(null);
 
   const [location, setLocation] = useState(null);
   const [places, setPlaces] = useState({ tire: [], gas: [], tow: [] });
@@ -65,9 +66,7 @@ export default function App() {
   const [locError, setLocError] = useState(null);
   const [only24h, setOnly24h] = useState(false);
 
-  useEffect(() => {
-    loadMaps().then(() => setMapsReady(true));
-  }, []);
+  useEffect(() => { loadMaps().then(() => setMapsReady(true)); }, []);
 
   useEffect(() => {
     if (mapsReady && mapRef.current && !mapInstance.current) {
@@ -124,8 +123,15 @@ export default function App() {
         const dist = distLabel(getDistance(lat, lng, plat, plng));
         const isOpen = place.opening_hours?.isOpen?.() ?? null;
         const h24 = is24h(place);
-        const infoContent = `<div style="background:#2a2a3a;border-radius:8px;padding:8px 10px;color:#fff;font-family:sans-serif;min-width:130px;"><div style="font-weight:700;font-size:13px">${place.name}</div><div style="font-size:11px;color:#aaa;margin-top:2px">${isOpen !== null ? (isOpen ? "Aberto" : "Fechado") : ""}${h24 ? " · 24h" : ""} · ${dist}</div></div>`;
+
+        const infoContent = `<div style="background:#2a2a3a;border-radius:8px;padding:8px 10px;color:#fff;font-family:sans-serif;min-width:130px;">
+          <div style="font-weight:700;font-size:13px">${place.name}</div>
+          <div style="font-size:11px;color:#aaa;margin-top:2px">
+            ${isOpen !== null ? (isOpen ? "Aberto" : "Fechado") : ""}${h24 ? " · 24h" : ""} · ${dist}
+          </div>
+        </div>`;
         const infoWindow = new window.google.maps.InfoWindow({ content: infoContent });
+
         const marker = new window.google.maps.Marker({
           position: { lat: plat, lng: plng },
           map: mapInstance.current,
@@ -136,6 +142,8 @@ export default function App() {
             anchor: new window.google.maps.Point(16, 40),
           },
         });
+
+        marker._placeId = place.place_id;
         marker.addListener("click", () => infoWindow.open(mapInstance.current, marker));
         markersRef.current.push(marker);
       });
@@ -157,14 +165,12 @@ export default function App() {
     let done = 0;
 
     CATEGORIES.forEach(cat => {
-      // Postos: busca só por tipo, sem keyword, para retornar todos os cadastrados
       const searchParams = {
         location: center,
         radius: 5000,
         type: cat.type,
         ...(cat.keyword && { keyword: cat.keyword }),
       };
-
       service.nearbySearch(searchParams, (results, status) => {
         const OK = window.google.maps.places.PlacesServiceStatus.OK;
         const items = status === OK && results ? results.slice(0, 10) : [];
@@ -208,6 +214,20 @@ export default function App() {
     );
   };
 
+  // Clique no nome do card: centraliza no mapa e abre o balão
+  const handleCardClick = (place) => {
+    const marker = markersRef.current.find(m => m._placeId === place.place_id);
+    if (marker && mapInstance.current) {
+      mapInstance.current.panTo(marker.getPosition());
+      mapInstance.current.setZoom(17);
+      window.google.maps.event.trigger(marker, "click");
+      // Rola suavemente para o topo para ver o mapa
+      if (scrollRef.current) {
+        scrollRef.current.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }
+  };
+
   const activeCat = CATEGORIES.find(c => c.id === activeTab);
   const activePlaces = (places[activeTab] || []).filter(p => {
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
@@ -231,6 +251,7 @@ export default function App() {
         @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
         input::placeholder { color: #555; }
         .scroll-area { -webkit-overflow-scrolling: touch; }
+        .card-name:active { opacity: 0.7; }
       `}</style>
 
       <div style={{
@@ -258,7 +279,7 @@ export default function App() {
         </div>
 
         {/* SCROLL AREA */}
-        <div className="scroll-area" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", paddingBottom: 80 }}>
+        <div ref={scrollRef} className="scroll-area" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", paddingBottom: 80 }}>
 
           {/* SEARCH */}
           <div style={{ padding: "16px 16px 12px" }}>
@@ -334,8 +355,7 @@ export default function App() {
               <div style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>Serviços Próximos</div>
               {searched && !loading && (
                 <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>
-                  {activePlaces.length} resultado{activePlaces.length !== 1 ? "s" : ""}
-                  {only24h ? " · apenas 24h" : ""}
+                  {activePlaces.length} resultado{activePlaces.length !== 1 ? "s" : ""}{only24h ? " · apenas 24h" : ""}
                 </div>
               )}
             </div>
@@ -350,8 +370,7 @@ export default function App() {
                 fontFamily: "'Inter', sans-serif",
                 WebkitTapHighlightColor: "transparent",
               }}>
-                <span style={{ fontSize: 14 }}>🕐</span>
-                Apenas 24h
+                <span style={{ fontSize: 13 }}>🕐</span> Apenas 24h
               </button>
             )}
           </div>
@@ -409,6 +428,8 @@ export default function App() {
                   animation: `fadeUp 0.3s ease ${i*0.04}s both`,
                   position: "relative", overflow: "hidden",
                 }}>
+
+                  {/* Borda lateral 24h */}
                   {h24 && (
                     <div style={{
                       position: "absolute", left: 0, top: 0, bottom: 0,
@@ -416,10 +437,24 @@ export default function App() {
                     }}/>
                   )}
 
+                  {/* Header */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, flex: 1, paddingRight: 10 }}>
+
+                    {/* NOME CLICÁVEL */}
+                    <div
+                      className="card-name"
+                      onClick={() => handleCardClick(place)}
+                      style={{
+                        fontSize: 15, fontWeight: 700, color: "#fff",
+                        lineHeight: 1.3, flex: 1, paddingRight: 10,
+                        cursor: "pointer",
+                        borderBottom: "1px dashed rgba(255,255,255,0.2)",
+                        paddingBottom: 2,
+                      }}
+                    >
                       {place.name}
                     </div>
+
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
                       {dist && (
                         <span style={{
@@ -446,6 +481,7 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Estrelas */}
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                     <Stars rating={place.rating} />
                     {place.user_ratings_total && (
@@ -453,6 +489,7 @@ export default function App() {
                     )}
                   </div>
 
+                  {/* Endereço */}
                   {place.vicinity && (
                     <div style={{ fontSize: 12, color: "#666", marginBottom: phone ? 6 : 12, display: "flex", gap: 5, alignItems: "flex-start", lineHeight: 1.5 }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2.5" style={{ marginTop: 1, flexShrink: 0 }}>
@@ -462,6 +499,7 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Telefone */}
                   {phone && (
                     <div style={{ fontSize: 12, color: "#888", marginBottom: 12, display: "flex", gap: 5, alignItems: "center" }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2.5">
@@ -471,6 +509,7 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Botões */}
                   <div style={{ display: "flex", gap: 8 }}>
                     {phone && (
                       <a href={waUrl || `tel:${phone}`} style={{
@@ -521,10 +560,10 @@ export default function App() {
           padding: "10px 0 28px", display: "flex", zIndex: 100,
         }}>
           {[
-            { id: "map",     label: "Mapa",        icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg> },
-            { id: "routes",  label: "Rotas",       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M6 15V9a6 6 0 0 1 12 0v9"/></svg> },
-            { id: "maint",   label: "Manutenção",  icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> },
-            { id: "profile", label: "Perfil",      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
+            { id: "map", label: "Mapa", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg> },
+            { id: "routes", label: "Rotas", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M6 15V9a6 6 0 0 1 12 0v9"/></svg> },
+            { id: "maint", label: "Manutenção", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> },
+            { id: "profile", label: "Perfil", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
           ].map(item => {
             const active = activeNav === item.id;
             return (
