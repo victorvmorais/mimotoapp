@@ -289,7 +289,7 @@ export default function App(){
           <div style={{position:"absolute",top:68,left:12,right:12,zIndex:10,display:"flex",gap:8}}>
             {CATS.map(cat=>{
               const active=tab===cat.id;
-              return<button key={cat.id} onClick={()=>{setTab(cat.id);setF24(false);}} style={{display:"flex",alignItems:"center",gap:5,padding:"7px 14px",borderRadius:99,border:"none",cursor:"pointer",background:active?cat.color:C.glass,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",color:active?C.white:C.navy,fontSize:12,fontWeight:700,fontFamily:"Outfit,sans-serif",boxShadow:active?`0 4px 14px ${cat.color}55`:"0 2px 8px rgba(27,45,91,0.1)",border:active?"none":`1px solid rgba(255,255,255,0.6)`,transition:"all 0.2s",WebkitTapHighlightColor:"transparent",flexShrink:0}}>
+              return<button key={cat.id} onClick={()=>{setTab(cat.id);setF24(false);}} style={{display:"flex",alignItems:"center",gap:5,padding:"7px 14px",borderRadius:99,border:"none",cursor:"pointer",background:active?cat.color:C.glass,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",color:active?C.white:C.navy,fontSize:12,fontWeight:700,fontFamily:"Outfit,sans-serif",boxShadow:active?"0 4px 14px "+cat.color+"55":"0 2px 8px rgba(27,45,91,0.1)",border:active?"none":`1px solid rgba(255,255,255,0.6)`,transition:"all 0.2s",WebkitTapHighlightColor:"transparent",flexShrink:0}}>
                 {cat.icon} {cat.label}
               </button>;
             })}
@@ -324,12 +324,12 @@ export default function App(){
               <div style={{overflowX:"auto",paddingBottom:16,WebkitOverflowScrolling:"touch"}}>
                 <div style={{display:"flex",gap:10,padding:"4px 16px 0",width:"max-content"}}>
 
-                  {!searched&&!busy&&<div style={{width:200,background:"rgba(255,255,255,0.6)",borderRadius:16,padding:"16px",border:`1px solid ${C.border}`,display:"flex",flexDirection:"column",alignItems:"center",gap:8,minHeight:100,justifyContent:"center"}}>
+                  {!searched&&!busy&&<div style={{width:200,background:"rgba(255,255,255,0.6)",borderRadius:16,padding:"16px",border:"1px solid "+C.border,display:"flex",flexDirection:"column",alignItems:"center",gap:8,minHeight:100,justifyContent:"center"}}>
                     <span style={{fontSize:28}}>📍</span>
                     <div style={{fontSize:12,color:C.textMid,textAlign:"center",lineHeight:1.5}}>Toque em <strong style={{color:C.navy}}>GPS</strong> para buscar</div>
                   </div>}
 
-                  {busy&&[1,2,3].map(i=><div key={i} style={{width:180,background:"rgba(255,255,255,0.6)",borderRadius:16,padding:14,border:`1px solid ${C.border}`,opacity:0.6,minHeight:100}}>
+                  {busy&&[1,2,3].map(i=><div key={i} style={{width:180,background:"rgba(255,255,255,0.6)",borderRadius:16,padding:14,border:"1px solid "+C.border,opacity:0.6,minHeight:100}}>
                     {[55,35,70].map((w,j)=><div key={j} style={{height:j===0?13:9,background:C.surface,borderRadius:5,marginBottom:8,width:`${w}%`}}/>)}
                     <div style={{height:32,background:C.surface,borderRadius:8,marginTop:8}}/>
                   </div>)}
@@ -341,7 +341,7 @@ export default function App(){
                     const open=place.opening_hours?.isOpen?.()??null;
                     const is24=h24(place);
                     const murl=`https://www.google.com/maps/dir/?api=1&destination=${place.geometry.location.lat()},${place.geometry.location.lng()}`;
-                    return<div key={place.place_id||i} className="card" style={{animationDelay:`${i*0.04}s`,width:210,background:"rgba(255,255,255,0.85)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",borderRadius:18,padding:14,border:`1px solid ${is24?"rgba(29,176,105,0.3)":C.border}`,flexShrink:0,boxShadow:"0 4px 16px rgba(27,45,91,0.08)",position:"relative",overflow:"hidden"}}>
+                    return<div key={place.place_id||i} className="card" style={{animationDelay:i*0.04+"s",width:210,background:"rgba(255,255,255,0.85)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",borderRadius:18,padding:14,border:`1px solid ${is24?"rgba(29,176,105,0.3)":C.border}`,flexShrink:0,boxShadow:"0 4px 16px rgba(27,45,91,0.08)",position:"relative",overflow:"hidden"}}>
                       {is24&&<div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${C.green},${C.accent})`}}/>}
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                         <div onClick={()=>focusPlace(place)} style={{fontSize:13,fontWeight:700,color:C.navy,lineHeight:1.3,flex:1,paddingRight:6,cursor:"pointer",borderBottom:`1px dashed ${C.border}`}}>{place.name}</div>
@@ -354,7 +354,7 @@ export default function App(){
                       {is24&&<span style={{fontSize:9,fontWeight:800,color:C.green,background:"rgba(29,176,105,0.1)",padding:"2px 6px",borderRadius:99,border:`1px solid rgba(29,176,105,0.2)`}}>24 HORAS</span>}
                       {place.vicinity&&<div style={{fontSize:10,color:C.textLight,marginTop:5,lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{place.vicinity}</div>}
                       <div style={{display:"flex",gap:6,marginTop:10}}>
-                        {phone&&<a href={wurl||`tel:${phone}`} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:4,padding:"8px 0",borderRadius:10,background:wurl?"rgba(37,211,102,0.1)":C.surface,color:wurl?"#25D366":C.textMid,border:wurl?"1px solid rgba(37,211,102,0.2)":`1px solid ${C.border}`,textDecoration:"none",fontSize:11,fontWeight:700}}>
+                        {phone&&<a href={wurl||`tel:${phone}`} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:4,padding:"8px 0",borderRadius:10,background:wurl?"rgba(37,211,102,0.1)":C.surface,color:wurl?"#25D366":C.textMid,border:wurl?"1px solid rgba(37,211,102,0.2)":"1px solid "+C.border+,textDecoration:"none",fontSize:11,fontWeight:700}}>
                           {wurl?"💬":"📞"}{wurl?"WA":"Ligar"}
                         </a>}
                         <a href={murl} target="_blank" rel="noreferrer" style={{flex:phone?1.4:2,display:"flex",alignItems:"center",justifyContent:"center",gap:4,padding:"8px 0",borderRadius:10,background:activeCat?.color,color:C.white,textDecoration:"none",fontSize:11,fontWeight:700}}>
@@ -410,7 +410,8 @@ export default function App(){
                 <div style={{fontSize:14,fontWeight:700,color:C.navy,margin:"20px 0 12px"}}>Histórico</div>
                 {fuel.map((f,i)=>{
                   const total=(parseFloat(f.liters)||0)*(parseFloat(f.pricePerLiter)||0);
-                  return<div key={f.id} className="card" style={{animationDelay:`${i*0.04}s`,background:C.white,borderRadius:16,padding:"14px 16px",marginBottom:10,border:`1px solid ${C.border}`,boxShadow:"0 2px 8px rgba(27,45,91,0.05)`,display:"flex",alignItems:"center",gap:12}}>
+                  const fDelay=i*0.04+"s";
+                  return<div key={f.id} className="card" style={{animationDelay:fDelay,background:C.white,borderRadius:16,padding:"14px 16px",marginBottom:10,border:"1px solid "+C.border,boxShadow:"0 2px 8px rgba(27,45,91,0.05)",display:"flex",alignItems:"center",gap:12}}>
                     <div style={{width:44,height:44,borderRadius:12,background:C.offWhite,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>⛽</div>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
@@ -469,13 +470,13 @@ export default function App(){
                     const ac=alert?(alert.diff<=0?C.red:alert.diff<=500?C.orange:C.green):C.accent;
                     return<div key={item.id} className="card" style={{animationDelay:`${i*0.04}s`,display:"flex",gap:12,marginBottom:14,position:"relative"}}>
                       {/* Timeline dot */}
-                      <div style={{width:44,height:44,borderRadius:"50%",background:C.white,border:`2.5px solid ${ac}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1,boxShadow:`0 0 0 4px ${ac}18`}}>
+                      <div style={{width:44,height:44,borderRadius:"50%",background:C.white,border:"2.5px solid "+ac,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1,boxShadow:"0 0 0 4px "+ac+"18"}}>
                         {tdef?.icon}
                       </div>
                       <div style={{flex:1,background:C.white,borderRadius:16,padding:"12px 14px",border:`1px solid ${alert&&alert.diff<=500?"rgba(240,125,26,0.25)":C.border}`,boxShadow:"0 2px 8px rgba(27,45,91,0.05)"}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                           <div style={{fontSize:14,fontWeight:700,color:C.navy}}>{label}</div>
-                          {alert&&<span style={{fontSize:10,fontWeight:800,color:ac,background:`${ac}15`,padding:"2px 8px",borderRadius:99,border:`1px solid ${ac}30`,whiteSpace:"nowrap",marginLeft:6,flexShrink:0}}>{alert.diff<=0?"VENCIDA":alert.diff<=500?`${alert.diff}km`:`${parseInt(alert.nk).toLocaleString()}km`}</span>}
+                          {alert&&<span style={{fontSize:10,fontWeight:800,color:ac,background:ac+"15",padding:"2px 8px",borderRadius:99,border:"1px solid "+ac+"30",whiteSpace:"nowrap",marginLeft:6,flexShrink:0}}>{alert.diff<=0?"VENCIDA":alert.diff<=500?alert.diff+"km":parseInt(alert.nk).toLocaleString()+"km"}</span>}
                         </div>
                         <div style={{fontSize:11,color:C.textLight,marginBottom:item.product?4:0}}>{item.date}{item.km?` · ${parseInt(item.km).toLocaleString()} km`:""}</div>
                         {item.product&&<div style={{fontSize:12,color:C.textMid}}>📦 {item.product}</div>}
@@ -515,7 +516,7 @@ export default function App(){
                 {label:"km atual",value:profile.currentKm?parseInt(profile.currentKm).toLocaleString():"—",icon:"🏁"},
                 {label:"km/litro",value:profile.kmpl||"—",icon:"⚡"},
                 {label:"tanque",value:profile.tankL?`${profile.tankL}L`:"—",icon:"🛢️"},
-              ].map((s,i)=><div key={i} style={{flex:1,background:C.white,borderRadius:16,padding:"14px 8px",textAlign:"center",boxShadow:"0 4px 20px rgba(27,45,91,0.12)",border:`1px solid ${C.border}`}}>
+              ].map((s,i)=><div key={i} style={{flex:1,background:C.white,borderRadius:16,padding:"14px 8px",textAlign:"center",boxShadow:"0 4px 20px rgba(27,45,91,0.12)",border:"1px solid "+C.border}}>
                 <div style={{fontSize:18,marginBottom:4}}>{s.icon}</div>
                 <div style={{fontSize:15,fontWeight:800,color:C.navy,lineHeight:1}}>{s.value}</div>
                 <div style={{fontSize:9,color:C.textLight,marginTop:3,textTransform:"uppercase",letterSpacing:0.5}}>{s.label}</div>
@@ -526,7 +527,7 @@ export default function App(){
               {!editProfile?(
                 <PrimaryBtn onClick={()=>setEditProfile({...profile})}>✏️ Editar Perfil</PrimaryBtn>
               ):(
-                <div style={{background:C.white,borderRadius:20,padding:"20px 16px",border:`1px solid ${C.border}`,boxShadow:"0 4px 20px rgba(27,45,91,0.08)"}}>
+                <div style={{background:C.white,borderRadius:20,padding:"20px 16px",border:"1px solid "+C.border,boxShadow:"0 4px 20px rgba(27,45,91,0.08)"}}>
                   <div style={{fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Editar informações</div>
                   <Field label="Seu nome" value={editProfile.name} onChange={v=>setEditProfile(p=>({...p,name:v}))} placeholder="Victor"/>
                   <Field label="URL da foto" value={editProfile.photoUrl||""} onChange={v=>setEditProfile(p=>({...p,photoUrl:v}))} placeholder="https://..."/>
@@ -548,7 +549,7 @@ export default function App(){
 
         {/* ═══ BOTTOM NAV ═══ */}
         <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,zIndex:50}}>
-          <div style={{background:"rgba(255,255,255,0.88)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderTop:`1px solid ${C.border}`,padding:"10px 0 28px",display:"flex",boxShadow:"0 -4px 24px rgba(27,45,91,0.1)"}}>
+          <div style={{background:"rgba(255,255,255,0.88)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderTop:"1px solid "+C.border,padding:"10px 0 28px",display:"flex",boxShadow:"0 -4px 24px rgba(27,45,91,0.1)"}}>
             {[
               {id:"map",label:"Mapa",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>},
               {id:"fuel",label:"Combustível",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 22V8l9-6 9 6v14"/><path d="M9 22V12h6v10"/></svg>},
