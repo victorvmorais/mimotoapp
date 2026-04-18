@@ -354,7 +354,7 @@ export default function App(){
                       {is24&&<span style={{fontSize:9,fontWeight:800,color:C.green,background:"rgba(29,176,105,0.1)",padding:"2px 6px",borderRadius:99,border:`1px solid rgba(29,176,105,0.2)`}}>24 HORAS</span>}
                       {place.vicinity&&<div style={{fontSize:10,color:C.textLight,marginTop:5,lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{place.vicinity}</div>}
                       <div style={{display:"flex",gap:6,marginTop:10}}>
-                        {phone&&<a href={wurl||`tel:${phone}`} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:4,padding:"8px 0",borderRadius:10,background:wurl?"rgba(37,211,102,0.1)":C.surface,color:wurl?"#25D366":C.textMid,border:wurl?"1px solid rgba(37,211,102,0.2)":"1px solid "+C.border+,textDecoration:"none",fontSize:11,fontWeight:700}}>
+                        {phone&&<a href={wurl||`tel:${phone}`} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:4,padding:"8px 0",borderRadius:10,background:wurl?"rgba(37,211,102,0.1)":C.surface,color:wurl?"#25D366":C.textMid,border:wurl?"1px solid rgba(37,211,102,0.2)":"1px solid "+C.border,textDecoration:"none",fontSize:11,fontWeight:700}}>
                           {wurl?"💬":"📞"}{wurl?"WA":"Ligar"}
                         </a>}
                         <a href={murl} target="_blank" rel="noreferrer" style={{flex:phone?1.4:2,display:"flex",alignItems:"center",justifyContent:"center",gap:4,padding:"8px 0",borderRadius:10,background:activeCat?.color,color:C.white,textDecoration:"none",fontSize:11,fontWeight:700}}>
