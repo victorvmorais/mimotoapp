@@ -136,17 +136,221 @@ export default function App(){
   const [fuelSheet,setFuelSheet]=useState(false);
   const [ff,setFf]=useState({liters:"",pricePerLiter:"",km:"",date:new Date().toISOString().slice(0,10),tankFull:false});
   const [fuelLiters,setFuelLiters]=useState(0);
+  const [kmCheckVisible,setKmCheckVisible]=useState(false);
+  const [kmInput,setKmInput]=useState("");
+  const [kmSaving,setKmSaving]=useState(false);
+  const [shifts,setShifts]=useState([]);
+  const [activeShift,setActiveShift]=useState(null);
+  const [shiftSheet,setShiftSheet]=useState(false);
+  const [closeSheet,setCloseSheet]=useState(false);
+  const [sf,setSf]=useState({date:new Date().toISOString().slice(0,10),startTime:"",startKm:"",endTime:"",endKm:"",earnings:""});
 
-  useEffect(()=>{loadMaps().then(()=>setMapsOk(true));loadProfile();loadManut();loadFuel();},[]);
+  useEffect(()=>{loadMaps().then(()=>setMapsOk(true));loadProfile();loadManut();loadShifts();},[]);
 
-  async function loadProfile(){try{const s=await getDoc(doc(db,"users",USER_ID));const def={name:"Victor",moto:"Yamaha Crosser ZTX",year:"2019",kmpl:"36",tankL:"12",reserveL:"3",currentKm:"77903",photoUrl:""};if(s.exists())setProfile({...def,...s.data()});else await setDoc(doc(db,"users",USER_ID),def);}catch(e){}}
-  async function saveProfile(d){setSaving(true);try{await setDoc(doc(db,"users",USER_ID),d);setProfile(d);setEditProfile(null);}catch(e){}setSaving(false);}
+  // Check diário de km — aparece ao meio-dia (12h), uma vez por dia
+  useEffect(()=>{
+    function checkKmPrompt(){
+      const now=new Date();
+      const hour=now.getHours();
+      const today=now.toISOString().slice(0,10);
+      const lastAsked=localStorage.getItem("mimoto_km_asked");
+      // Mostra a partir das 12h se ainda não perguntou hoje
+      if(hour>=12&&lastAsked!==today){
+        setKmCheckVisible(true);
+      }
+    }
+    // Checa ao abrir
+    checkKmPrompt();
+    // Checa a cada 5 minutos (caso o app fique aberto passando das 12h)
+    const interval=setInterval(checkKmPrompt,5*60*1000);
+    return()=>clearInterval(interval);
+  },[]);
+
+  async function loadProfile(){
+    try{
+      const s=await getDoc(doc(db,"users",USER_ID));
+      const def={name:"Victor",moto:"Yamaha Crosser ZTX",year:"2019",kmpl:"36",tankL:"12",reserveL:"3",currentKm:"77903",photoUrl:""};
+      const profileData=s.exists()?{...def,...s.data()}:def;
+      if(!s.exists()) await setDoc(doc(db,"users",USER_ID),def);
+      setProfile(profileData);
+      // Passa os dados do perfil para loadFuel para calcular gauge corretamente
+      loadFuel(profileData);
+    }catch(e){}
+  }
+  async function saveProfile(d){
+    setSaving(true);
+    try{
+      await setDoc(doc(db,"users",USER_ID),d);
+      setProfile(d);
+      setEditProfile(null);
+      // Recalcula gauge com novos dados do perfil
+      loadFuel(d);
+    }catch(e){}
+    setSaving(false);
+  }
+
+  async function saveKmCheck(){
+    const km=parseInt(kmInput);
+    if(!km||km<1000)return;
+    setKmSaving(true);
+    try{
+      // 1. Atualiza perfil com nova km
+      const newProfile={...profile,currentKm:String(km)};
+      await setDoc(doc(db,"users",USER_ID),newProfile);
+      setProfile(newProfile);
+
+      // 2. Recalcula gauge de combustível com nova km
+      if(fuel.length>0){
+        const lastFuel=fuel[0];
+        const lastKm=parseInt(lastFuel.km)||0;
+        const tankLVal=parseFloat(newProfile.tankL)||12;
+        const lastLiters=lastFuel.tankFull?tankLVal:parseFloat(lastFuel.liters)||0;
+        const kmplVal=parseFloat(newProfile.kmpl)||36;
+        if(lastKm>0){
+          const kmRodados=Math.max(0,km-lastKm);
+          const consumed=kmRodados/kmplVal;
+          const remaining=Math.max(0,lastLiters-consumed);
+          setFuelLiters(remaining);
+        }
+      }
+
+      // 3. Também chama loadFuel com o novo perfil para garantir consistência
+      loadFuel(newProfile);
+
+      // 4. Marca hoje como perguntado
+      localStorage.setItem("mimoto_km_asked",new Date().toISOString().slice(0,10));
+      setKmCheckVisible(false);
+      setKmInput("");
+    }catch(e){}
+    setKmSaving(false);
+  }
+
+  function dismissKmCheck(){
+    localStorage.setItem("mimoto_km_asked",new Date().toISOString().slice(0,10));
+    setKmCheckVisible(false);
+    setKmInput("");
+  }
   async function loadManut(){try{const s=await getDocs(query(collection(db,"users",USER_ID,"manut"),orderBy("date","desc")));setManut(s.docs.map(d=>({id:d.id,...d.data()})));}catch(e){}}
   async function saveManut(){try{await addDoc(collection(db,"users",USER_ID,"manut"),mf);setManutSheet(false);setMf({type:"oil",customLabel:"",product:"",date:new Date().toISOString().slice(0,10),km:""});loadManut();}catch(e){}}
   async function delManut(id){try{await deleteDoc(doc(db,"users",USER_ID,"manut",id));loadManut();}catch(e){}}
-  async function loadFuel(){try{const s=await getDocs(query(collection(db,"users",USER_ID,"fuel"),orderBy("date","desc")));const l=s.docs.map(d=>({id:d.id,...d.data()}));setFuel(l);if(l.length>0){const la=l[0];setFuelLiters(la.tankFull?(parseFloat(profile.tankL)||12):parseFloat(la.liters)||0);}}catch(e){}}
-  async function saveFuel(){try{await addDoc(collection(db,"users",USER_ID,"fuel"),ff);setFuelLiters(ff.tankFull?(parseFloat(profile.tankL)||12):parseFloat(ff.liters)||0);setFuelSheet(false);setFf({liters:"",pricePerLiter:"",km:"",date:new Date().toISOString().slice(0,10),tankFull:false});loadFuel();}catch(e){}}
+  async function loadFuel(profileData){
+    try{
+      // Busca perfil do Firebase se não foi passado como parâmetro
+      let tankL=parseFloat(profileData?.tankL)||0;
+      let kmplVal=parseFloat(profileData?.kmpl)||36;
+      let currentKmVal=parseInt(profileData?.currentKm)||0;
+      if(!tankL){
+        try{
+          const pSnap=await getDoc(doc(db,"users",USER_ID));
+          if(pSnap.exists()){
+            tankL=parseFloat(pSnap.data().tankL)||12;
+            kmplVal=parseFloat(pSnap.data().kmpl)||36;
+            currentKmVal=parseInt(pSnap.data().currentKm)||0;
+          }
+        }catch(e){}
+      }
+      const s=await getDocs(query(collection(db,"users",USER_ID,"fuel"),orderBy("date","desc")));
+      const l=s.docs.map(d=>({id:d.id,...d.data()}));
+      setFuel(l);
+      if(l.length>0){
+        const la=l[0];
+        // Litros no último abastecimento
+        const lastLiters=la.tankFull?tankL:parseFloat(la.liters)||0;
+        const lastKm=parseInt(la.km)||0;
+        // Se temos km atual e km do abastecimento, calcula consumo
+        if(currentKmVal>0&&lastKm>0&&currentKmVal>lastKm){
+          const kmRodados=currentKmVal-lastKm;
+          const consumed=kmRodados/kmplVal;
+          const remaining=Math.max(0,lastLiters-consumed);
+          setFuelLiters(remaining);
+        }else{
+          setFuelLiters(lastLiters);
+        }
+      }
+    }catch(e){}
+  }
+  async function saveFuel(){
+    try{
+      await addDoc(collection(db,"users",USER_ID,"fuel"),ff);
+      setFuelSheet(false);
+      setFf({liters:"",pricePerLiter:"",km:"",date:new Date().toISOString().slice(0,10),tankFull:false});
+      loadFuel(profile);
+    }catch(e){}
+  }
   async function delFuel(id){try{await deleteDoc(doc(db,"users",USER_ID,"fuel",id));loadFuel();}catch(e){}}
+
+  async function loadShifts(){
+    try{
+      const s=await getDocs(query(collection(db,"users",USER_ID,"shifts"),orderBy("date","desc")));
+      const list=s.docs.map(d=>({id:d.id,...d.data()}));
+      setShifts(list);
+      // Verifica se há turno aberto
+      const open=list.find(s=>!s.endTime);
+      setActiveShift(open||null);
+    }catch(e){}
+  }
+
+  async function startShift(){
+    const now=new Date();
+    const timeStr=now.getHours().toString().padStart(2,"0")+":"+now.getMinutes().toString().padStart(2,"0");
+    const data={
+      date:sf.date,
+      startTime:sf.startTime||timeStr,
+      startKm:sf.startKm||profile.currentKm||"",
+      endTime:"",endKm:"",earnings:"",
+    };
+    try{
+      const ref=await addDoc(collection(db,"users",USER_ID,"shifts"),data);
+      setActiveShift({id:ref.id,...data});
+      setShiftSheet(false);
+      setSf({date:new Date().toISOString().slice(0,10),startTime:"",startKm:"",endTime:"",endKm:"",earnings:""});
+      loadShifts();
+    }catch(e){}
+  }
+
+  async function closeShift(){
+    if(!activeShift)return;
+    const now=new Date();
+    const timeStr=now.getHours().toString().padStart(2,"0")+":"+now.getMinutes().toString().padStart(2,"0");
+    const updated={
+      ...activeShift,
+      endTime:sf.endTime||timeStr,
+      endKm:sf.endKm||"",
+      earnings:sf.earnings||"",
+    };
+    try{
+      await setDoc(doc(db,"users",USER_ID,"shifts",activeShift.id),updated);
+      // Atualiza km no perfil se informado
+      if(sf.endKm&&parseInt(sf.endKm)>0){
+        const newProfile={...profile,currentKm:sf.endKm};
+        await setDoc(doc(db,"users",USER_ID),newProfile);
+        setProfile(newProfile);
+      }
+      setActiveShift(null);
+      setCloseSheet(false);
+      setSf({date:new Date().toISOString().slice(0,10),startTime:"",startKm:"",endTime:"",endKm:"",earnings:""});
+      loadShifts();
+    }catch(e){}
+  }
+
+  async function delShift(id){
+    try{await deleteDoc(doc(db,"users",USER_ID,"shifts",id));loadShifts();}catch(e){}
+  }
+
+  function calcShiftStats(s){
+    const km=s.endKm&&s.startKm?parseInt(s.endKm)-parseInt(s.startKm):0;
+    const earn=parseFloat(s.earnings)||0;
+    const rPerKm=km>0?earn/km:0;
+    let hours=0;
+    if(s.startTime&&s.endTime){
+      const [sh,sm]=s.startTime.split(":").map(Number);
+      const [eh,em]=s.endTime.split(":").map(Number);
+      hours=((eh*60+em)-(sh*60+sm))/60;
+      if(hours<0)hours+=24;
+    }
+    const rPerHour=hours>0?earn/hours:0;
+    return{km,earn,rPerKm,hours,rPerHour};
+  }
 
   useEffect(()=>{
     if(mapsOk&&mapRef.current&&!mapInst.current){
@@ -594,20 +798,168 @@ export default function App(){
           </div>
         </div>
 
+        {/* ═══ GANHOS (UBER) ═══ */}
+        <div style={{display:nav==="uber"?"flex":"none",flex:1,flexDirection:"column",overflow:"hidden"}}>
+          <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:80}}>
+
+            {/* Hero header */}
+            <div style={{background:"linear-gradient(160deg,"+C.navyDark+","+C.navy+")",padding:"24px 20px 28px",position:"relative",overflow:"hidden"}}>
+              <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,borderRadius:"50%",background:"rgba(107,156,232,0.08)"}}/>
+              <div style={{fontSize:13,color:"rgba(255,255,255,0.5)",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Ganhos · Uber</div>
+
+              {/* Active shift banner */}
+              {activeShift&&(
+                <div style={{background:"rgba(29,176,105,0.2)",border:"1px solid rgba(29,176,105,0.4)",borderRadius:14,padding:"12px 14px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div>
+                    <div style={{fontSize:12,color:"#7FFFBF",fontWeight:700}}>🟢 TURNO ABERTO</div>
+                    <div style={{fontSize:14,fontWeight:800,color:C.white,marginTop:2}}>
+                      Iniciado às {activeShift.startTime}{activeShift.startKm?" · "+parseInt(activeShift.startKm).toLocaleString()+" km":""}
+                    </div>
+                  </div>
+                  <button onClick={()=>{setSf({date:new Date().toISOString().slice(0,10),startTime:"",startKm:"",endTime:"",endKm:"",earnings:""});setCloseSheet(true);}} style={{background:C.green,border:"none",borderRadius:10,padding:"8px 14px",color:C.white,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"Outfit,sans-serif"}}>
+                    Fechar turno
+                  </button>
+                </div>
+              )}
+
+              {/* Monthly stats */}
+              {(()=>{
+                const thisMonth=new Date().toISOString().slice(0,7);
+                const monthShifts=shifts.filter(s=>s.date&&s.date.startsWith(thisMonth)&&s.endTime);
+                const totalEarn=monthShifts.reduce((acc,s)=>acc+(parseFloat(s.earnings)||0),0);
+                const totalKm=monthShifts.reduce((acc,s)=>acc+(s.endKm&&s.startKm?parseInt(s.endKm)-parseInt(s.startKm):0),0);
+                const avgRkm=totalKm>0?totalEarn/totalKm:0;
+                const totalHours=monthShifts.reduce((acc,s)=>{
+                  if(!s.startTime||!s.endTime)return acc;
+                  const [sh,sm]=s.startTime.split(":").map(Number);
+                  const [eh,em]=s.endTime.split(":").map(Number);
+                  let h=((eh*60+em)-(sh*60+sm))/60;
+                  if(h<0)h+=24;
+                  return acc+h;
+                },0);
+                return<>
+                  <div style={{display:"flex",gap:10,marginBottom:4}}>
+                    <div style={{flex:1,background:"rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 10px",textAlign:"center",border:"1px solid rgba(255,255,255,0.1)"}}>
+                      <div style={{fontSize:18,fontWeight:900,color:C.white}}>R${totalEarn.toFixed(0)}</div>
+                      <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginTop:2,textTransform:"uppercase",letterSpacing:0.5}}>total no mês</div>
+                    </div>
+                    <div style={{flex:1,background:"rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 10px",textAlign:"center",border:"1px solid rgba(255,255,255,0.1)"}}>
+                      <div style={{fontSize:18,fontWeight:900,color:avgRkm>0?(avgRkm>=2?C.accentLight:"#FFB070"):"rgba(255,255,255,0.4)"}}>
+                        {avgRkm>0?"R$"+avgRkm.toFixed(2):"—"}
+                      </div>
+                      <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginTop:2,textTransform:"uppercase",letterSpacing:0.5}}>por km (média)</div>
+                    </div>
+                    <div style={{flex:1,background:"rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 10px",textAlign:"center",border:"1px solid rgba(255,255,255,0.1)"}}>
+                      <div style={{fontSize:18,fontWeight:900,color:C.white}}>{totalKm.toLocaleString()}</div>
+                      <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginTop:2,textTransform:"uppercase",letterSpacing:0.5}}>km rodados</div>
+                    </div>
+                  </div>
+                  <div style={{fontSize:11,color:"rgba(255,255,255,0.3)",textAlign:"right",marginTop:4}}>{monthShifts.length} turno{monthShifts.length!==1?"s":""} · {totalHours.toFixed(1)}h trabalhadas este mês</div>
+                </>;
+              })()}
+            </div>
+
+            <div style={{padding:"20px 16px 0"}}>
+              {!activeShift?(
+                <PrimaryBtn color={C.green} onClick={()=>{setSf({date:new Date().toISOString().slice(0,10),startTime:"",startKm:profile.currentKm||"",endTime:"",endKm:"",earnings:""});setShiftSheet(true);}}>
+                  🟢 Iniciar Turno
+                </PrimaryBtn>
+              ):(
+                <button onClick={()=>{setSf({date:new Date().toISOString().slice(0,10),startTime:"",startKm:"",endTime:"",endKm:"",earnings:""});setCloseSheet(true);}} style={{width:"100%",padding:"14px",borderRadius:14,border:"2px solid "+C.red,background:"rgba(232,64,64,0.06)",color:C.red,fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"Outfit,sans-serif"}}>
+                  🔴 Fechar Turno Ativo
+                </button>
+              )}
+
+              {/* Histórico de turnos */}
+              {shifts.filter(s=>s.endTime).length>0&&<>
+                <div style={{fontSize:14,fontWeight:700,color:C.navy,margin:"20px 0 12px"}}>Histórico de Turnos</div>
+                {shifts.filter(s=>s.endTime).map((s,i)=>{
+                  const st=calcShiftStats(s);
+                  const perfColor=st.rPerKm>=2?C.green:st.rPerKm>=1.5?C.orange:C.red;
+                  return<div key={s.id} className="card" style={{animationDelay:i*0.04+"s",background:C.white,borderRadius:16,padding:"16px",marginBottom:12,border:"1px solid "+C.border,boxShadow:"0 2px 8px rgba(27,45,91,0.05)"}}>
+                    {/* Date + delete */}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:700,color:C.navy}}>
+                          {new Date(s.date+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"short"})}
+                        </div>
+                        <div style={{fontSize:11,color:C.textLight,marginTop:1}}>
+                          {s.startTime} → {s.endTime}{st.hours>0?" · "+st.hours.toFixed(1)+"h":""}
+                        </div>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontSize:18,fontWeight:900,color:C.green}}>R${st.earn.toFixed(2)}</div>
+                          <div style={{fontSize:10,color:C.textLight}}>{st.km>0?st.km.toLocaleString()+" km":""}</div>
+                        </div>
+                        <button onClick={()=>delShift(s.id)} style={{background:"none",border:"none",color:C.textLight,cursor:"pointer",fontSize:16,padding:4}}>🗑</button>
+                      </div>
+                    </div>
+
+                    {/* Metrics row */}
+                    <div style={{display:"flex",gap:8}}>
+                      <div style={{flex:1,background:C.offWhite,borderRadius:10,padding:"8px 6px",textAlign:"center"}}>
+                        <div style={{fontSize:15,fontWeight:900,color:perfColor}}>
+                          {st.rPerKm>0?"R$"+st.rPerKm.toFixed(2):"—"}
+                        </div>
+                        <div style={{fontSize:9,color:C.textLight,marginTop:1,textTransform:"uppercase",letterSpacing:0.3}}>por km</div>
+                      </div>
+                      <div style={{flex:1,background:C.offWhite,borderRadius:10,padding:"8px 6px",textAlign:"center"}}>
+                        <div style={{fontSize:15,fontWeight:900,color:C.navy}}>
+                          {st.rPerHour>0?"R$"+st.rPerHour.toFixed(2):"—"}
+                        </div>
+                        <div style={{fontSize:9,color:C.textLight,marginTop:1,textTransform:"uppercase",letterSpacing:0.3}}>por hora</div>
+                      </div>
+                      <div style={{flex:1,background:C.offWhite,borderRadius:10,padding:"8px 6px",textAlign:"center"}}>
+                        <div style={{fontSize:15,fontWeight:900,color:C.navy}}>
+                          {st.km>0?st.km.toLocaleString():"—"}
+                        </div>
+                        <div style={{fontSize:9,color:C.textLight,marginTop:1,textTransform:"uppercase",letterSpacing:0.3}}>km rodados</div>
+                      </div>
+                    </div>
+
+                    {/* Performance bar */}
+                    {st.rPerKm>0&&<div style={{marginTop:10}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                        <span style={{fontSize:10,color:C.textLight}}>performance</span>
+                        <span style={{fontSize:10,fontWeight:700,color:perfColor}}>
+                          {st.rPerKm>=2?"🔥 Ótimo":st.rPerKm>=1.5?"👍 Bom":"📉 Abaixo da meta"}
+                        </span>
+                      </div>
+                      <div style={{height:4,background:C.surface,borderRadius:99,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:Math.min(100,st.rPerKm/3*100)+"%",background:perfColor,borderRadius:99,transition:"width 0.8s ease"}}/>
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between",marginTop:2}}>
+                        <span style={{fontSize:9,color:C.textLight}}>R$0</span>
+                        <span style={{fontSize:9,color:C.textLight}}>meta: R$2,00/km</span>
+                        <span style={{fontSize:9,color:C.textLight}}>R$3+</span>
+                      </div>
+                    </div>}
+                  </div>;
+                })}
+              </>}
+            </div>
+          </div>
+        </div>
+
         {/* ═══ BOTTOM NAV ═══ */}
         <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,zIndex:50}}>
           <div style={{background:"rgba(255,255,255,0.88)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderTop:"1px solid "+C.border,padding:"10px 0 28px",display:"flex",boxShadow:"0 -4px 24px rgba(27,45,91,0.1)"}}>
             {[
-              {id:"map",label:"Mapa",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>},
-              {id:"fuel",label:"Combustível",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 22V8l9-6 9 6v14"/><path d="M9 22V12h6v10"/></svg>},
-              {id:"maint",label:"Manutenção",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>},
-              {id:"profile",label:"Perfil",icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>},
+              {id:"map",label:"Mapa",icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>},
+              {id:"fuel",label:"Combustível",icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 22V8l9-6 9 6v14"/><path d="M9 22V12h6v10"/></svg>},
+              {id:"uber",label:"Ganhos",icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,dot:!!activeShift},
+              {id:"maint",label:"Manutenção",icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>},
+              {id:"profile",label:"Perfil",icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>},
             ].map(item=>{
               const active=nav===item.id;
-              return<button key={item.id} onClick={()=>setNav(item.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"transparent",border:"none",cursor:"pointer",color:active?C.navy:C.textLight,fontFamily:"Outfit,sans-serif",WebkitTapHighlightColor:"transparent",transition:"all 0.15s",position:"relative"}}>
-                {active&&<div style={{position:"absolute",top:-10,left:"50%",transform:"translateX(-50%)",width:32,height:3,borderRadius:"0 0 3px 3px",background:C.navy}}/>}
-                {item.icon}
-                <span style={{fontSize:10,fontWeight:active?700:400}}>{item.label}</span>
+              return<button key={item.id} onClick={()=>setNav(item.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"transparent",border:"none",cursor:"pointer",color:active?(item.id==="uber"?C.green:C.navy):C.textLight,fontFamily:"Outfit,sans-serif",WebkitTapHighlightColor:"transparent",transition:"all 0.15s",position:"relative"}}>
+                {active&&<div style={{position:"absolute",top:-10,left:"50%",transform:"translateX(-50%)",width:28,height:3,borderRadius:"0 0 3px 3px",background:item.id==="uber"?C.green:C.navy}}/>}
+                <div style={{position:"relative"}}>
+                  {item.icon}
+                  {item.dot&&!active&&<div style={{position:"absolute",top:-2,right:-2,width:7,height:7,borderRadius:"50%",background:C.green,border:"1.5px solid white"}}/>}
+                </div>
+                <span style={{fontSize:9,fontWeight:active?700:400}}>{item.label}</span>
               </button>;
             })}
           </div>
@@ -637,6 +989,62 @@ export default function App(){
           <PrimaryBtn onClick={saveFuel} disabled={!ff.liters||!ff.pricePerLiter}>Salvar Abastecimento</PrimaryBtn>
         </Sheet>}
 
+        {/* ═══ SHEET: INICIAR TURNO ═══ */}
+        {shiftSheet&&<Sheet title="Iniciar Turno" onClose={()=>setShiftSheet(false)}>
+          <div style={{background:"rgba(29,176,105,0.06)",border:"1px solid rgba(29,176,105,0.2)",borderRadius:12,padding:"12px 14px",marginBottom:16,fontSize:13,color:C.green,fontWeight:600}}>
+            🟢 O turno ficará aberto até você fechar
+          </div>
+          <Field label="Data" value={sf.date} onChange={v=>setSf(f=>({...f,date:v}))} type="date"/>
+          <Field label="Horário de início" value={sf.startTime} onChange={v=>setSf(f=>({...f,startTime:v}))} type="time" placeholder="Ex: 08:00"/>
+          <Field label="Quilometragem inicial" value={sf.startKm} onChange={v=>setSf(f=>({...f,startKm:v}))} type="number" placeholder={"Ex: "+(profile.currentKm||"77903")}/>
+          <PrimaryBtn color={C.green} onClick={startShift} disabled={!sf.startTime&&!sf.date}>🟢 Iniciar Turno Agora</PrimaryBtn>
+        </Sheet>}
+
+        {/* ═══ SHEET: FECHAR TURNO ═══ */}
+        {closeSheet&&activeShift&&<Sheet title="Fechar Turno" onClose={()=>setCloseSheet(false)}>
+          <div style={{background:C.offWhite,borderRadius:12,padding:"12px 14px",marginBottom:16,border:"1px solid "+C.border}}>
+            <div style={{fontSize:11,color:C.textMid,marginBottom:4,fontWeight:700,textTransform:"uppercase",letterSpacing:0.5}}>Turno iniciado</div>
+            <div style={{fontSize:15,fontWeight:700,color:C.navy}}>{activeShift.startTime} · {activeShift.startKm?parseInt(activeShift.startKm).toLocaleString()+" km":""}</div>
+          </div>
+          <Field label="Horário de encerramento" value={sf.endTime} onChange={v=>setSf(f=>({...f,endTime:v}))} type="time" placeholder="Ex: 18:00"/>
+          <Field label="Quilometragem final" value={sf.endKm} onChange={v=>setSf(f=>({...f,endKm:v}))} type="number" placeholder="Ex: 78250"/>
+          <Field label="Total arrecadado (R$)" value={sf.earnings} onChange={v=>setSf(f=>({...f,earnings:v}))} type="number" placeholder="Ex: 187.50"/>
+
+          {sf.endKm&&sf.startTime&&sf.endTime&&sf.earnings&&(()=>{
+            const km=parseInt(sf.endKm)-(parseInt(activeShift.startKm)||0);
+            const earn=parseFloat(sf.earnings)||0;
+            const [sh,sm]=activeShift.startTime.split(":").map(Number);
+            const [eh,em]=sf.endTime.split(":").map(Number);
+            let hours=((eh*60+em)-(sh*60+sm))/60;
+            if(hours<0)hours+=24;
+            const rkm=km>0?earn/km:0;
+            const rh=hours>0?earn/hours:0;
+            const perfColor=rkm>=2?C.green:rkm>=1.5?C.orange:C.red;
+            return<div style={{background:"rgba(27,45,91,0.04)",borderRadius:12,padding:"14px",marginBottom:16,border:"1px solid "+C.border}}>
+              <div style={{fontSize:11,color:C.textMid,marginBottom:10,fontWeight:700,textTransform:"uppercase",letterSpacing:0.5}}>Resultado do turno</div>
+              <div style={{display:"flex",gap:10}}>
+                <div style={{flex:1,textAlign:"center"}}>
+                  <div style={{fontSize:20,fontWeight:900,color:perfColor}}>{rkm>0?"R$"+rkm.toFixed(2):"—"}</div>
+                  <div style={{fontSize:9,color:C.textLight,textTransform:"uppercase",letterSpacing:0.3}}>por km</div>
+                </div>
+                <div style={{flex:1,textAlign:"center"}}>
+                  <div style={{fontSize:20,fontWeight:900,color:C.navy}}>{rh>0?"R$"+rh.toFixed(2):"—"}</div>
+                  <div style={{fontSize:9,color:C.textLight,textTransform:"uppercase",letterSpacing:0.3}}>por hora</div>
+                </div>
+                <div style={{flex:1,textAlign:"center"}}>
+                  <div style={{fontSize:20,fontWeight:900,color:C.navy}}>{km>0?km.toLocaleString():"—"}</div>
+                  <div style={{fontSize:9,color:C.textLight,textTransform:"uppercase",letterSpacing:0.3}}>km rodados</div>
+                </div>
+              </div>
+              <div style={{marginTop:10,fontSize:12,fontWeight:700,color:perfColor,textAlign:"center"}}>
+                {rkm>=2?"🔥 Ótimo dia!":rkm>=1.5?"👍 Bom dia!":rkm>0?"📉 Abaixo da meta de R$2,00/km":""}
+              </div>
+            </div>;
+          })()}
+
+          <PrimaryBtn color={C.red} onClick={closeShift} disabled={!sf.endTime||!sf.earnings}>🔴 Fechar Turno</PrimaryBtn>
+        </Sheet>}
+
         {manutSheet&&<Sheet title="Registrar Manutenção" onClose={()=>setManutSheet(false)}>
           <div style={{marginBottom:16}}>
             <div style={{fontSize:11,color:C.textMid,marginBottom:10,fontWeight:700,letterSpacing:0.8,textTransform:"uppercase"}}>Tipo</div>
@@ -655,6 +1063,94 @@ export default function App(){
           </div>}
           <PrimaryBtn onClick={saveManut} disabled={mf.type==="other"&&!mf.customLabel}>Salvar Manutenção</PrimaryBtn>
         </Sheet>}
+
+        {/* ═══ KM CHECK DIÁRIO ═══ */}
+        {kmCheckVisible&&(
+          <div style={{position:"fixed",inset:0,background:"rgba(10,18,40,0.75)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
+            <div style={{background:C.white,borderRadius:28,padding:"28px 24px",width:"100%",maxWidth:400,boxShadow:"0 20px 60px rgba(27,45,91,0.25)",animation:"pop 0.3s cubic-bezier(.34,1.56,.64,1) both"}}>
+
+              {/* Header */}
+              <div style={{textAlign:"center",marginBottom:24}}>
+                <div style={{width:64,height:64,borderRadius:"50%",background:"linear-gradient(135deg,"+C.navyDark+","+C.navy+")",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",fontSize:28}}>🏍️</div>
+                <div style={{fontSize:11,color:C.textLight,letterSpacing:1.5,textTransform:"uppercase",marginBottom:6}}>Check diário · {new Date().toLocaleDateString("pt-BR",{weekday:"long"})}</div>
+                <div style={{fontSize:22,fontWeight:800,color:C.navy,lineHeight:1.2}}>Qual a quilometragem da sua moto agora?</div>
+                <div style={{fontSize:13,color:C.textMid,marginTop:8,lineHeight:1.5}}>
+                  Isso atualiza o nível de combustível e os alertas de manutenção automaticamente.
+                </div>
+              </div>
+
+              {/* Última km conhecida */}
+              {profile.currentKm&&(
+                <div style={{background:C.offWhite,borderRadius:12,padding:"10px 14px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <span style={{fontSize:12,color:C.textMid}}>Última km registrada</span>
+                  <span style={{fontSize:14,fontWeight:800,color:C.navy}}>{parseInt(profile.currentKm).toLocaleString()} km</span>
+                </div>
+              )}
+
+              {/* Input */}
+              <div style={{marginBottom:8}}>
+                <input
+                  type="number"
+                  value={kmInput}
+                  onChange={e=>setKmInput(e.target.value)}
+                  placeholder={"Ex: "+((parseInt(profile.currentKm)||77903)+50)}
+                  autoFocus
+                  style={{width:"100%",background:C.offWhite,border:"2px solid "+(kmInput&&parseInt(kmInput)>0?C.navy:C.border),borderRadius:14,padding:"14px 16px",color:C.navy,fontSize:18,fontWeight:700,outline:"none",fontFamily:"Outfit,sans-serif",textAlign:"center",WebkitAppearance:"none",transition:"border-color 0.2s"}}
+                />
+              </div>
+
+              {/* Preview do combustível */}
+              {kmInput&&parseInt(kmInput)>0&&fuel.length>0&&(()=>{
+                const km=parseInt(kmInput);
+                const lastFuel=fuel[0];
+                const lastKm=parseInt(lastFuel.km)||0;
+                const lastLiters=lastFuel.tankFull?(parseFloat(profile.tankL)||12):parseFloat(lastFuel.liters)||0;
+                const kmRodados=km-(parseInt(profile.currentKm)||0);
+                const kmDesdeAbast=km-lastKm;
+                const kmplVal=parseFloat(profile.kmpl)||36;
+                const consumed=Math.max(0,kmDesdeAbast/kmplVal);
+                const remaining=Math.max(0,lastLiters-consumed);
+                const pct=tankCap>0?Math.min(100,Math.round((remaining/tankCap)*100)):0;
+                const pctColor=pct>50?C.green:pct>25?C.orange:C.red;
+                return kmRodados>0&&lastKm>0?(
+                  <div style={{background:"rgba(27,45,91,0.04)",borderRadius:12,padding:"12px 14px",marginBottom:16,border:"1px solid "+C.border}}>
+                    <div style={{fontSize:11,color:C.textMid,marginBottom:8,fontWeight:700,textTransform:"uppercase",letterSpacing:0.5}}>Preview após atualização</div>
+                    <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:11,color:C.textLight}}>Km rodados hoje</div>
+                        <div style={{fontSize:16,fontWeight:800,color:C.navy}}>+{kmRodados.toLocaleString()} km</div>
+                      </div>
+                      <div style={{flex:1,textAlign:"center"}}>
+                        <div style={{fontSize:11,color:C.textLight}}>Combustível restante</div>
+                        <div style={{fontSize:20,fontWeight:900,color:pctColor}}>{pct}%</div>
+                        <div style={{fontSize:10,color:C.textLight}}>{remaining.toFixed(1)}L</div>
+                      </div>
+                    </div>
+                  </div>
+                ):null;
+              })()}
+
+              {/* Buttons */}
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={dismissKmCheck} style={{flex:1,padding:"13px",borderRadius:14,border:"1.5px solid "+C.border,background:"transparent",color:C.textMid,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"Outfit,sans-serif"}}>
+                  Agora não
+                </button>
+                <div style={{flex:2}}>
+                  <PrimaryBtn
+                    onClick={saveKmCheck}
+                    disabled={kmSaving||!kmInput||parseInt(kmInput)<1000}
+                  >
+                    {kmSaving?"Salvando...":"Atualizar"}
+                  </PrimaryBtn>
+                </div>
+              </div>
+
+              <div style={{textAlign:"center",marginTop:12,fontSize:11,color:C.textLight}}>
+                Aparece uma vez por dia · Próxima pergunta amanhã às 12h
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </>
