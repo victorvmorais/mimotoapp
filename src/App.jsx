@@ -26,9 +26,27 @@ const C = {
 
 const MAPS_KEY = "AIzaSyAWK94SwutfM0M6dxukmrUTQCfg4a83ltE";
 const CATS = [
-  {id:"tire",label:"Borracharias",icon:"🔧",type:"car_repair",keyword:"borracharia",color:C.red},
-  {id:"gas",label:"Postos",icon:"⛽",type:"gas_station",keyword:null,color:C.orange},
-  {id:"tow",label:"Reboques",icon:"🚛",type:null,keyword:"reboque 24h",color:C.accent},
+  {id:"tire",label:"Borracharias",icon:"🔧",color:C.red,
+   searches:[
+     {type:"car_repair",keyword:"borracharia"},
+     {type:"car_repair",keyword:"borracharia moto"},
+     {type:null,keyword:"borracharia"},
+     {type:null,keyword:"vulcanizadora"},
+   ]},
+  {id:"gas",label:"Postos",icon:"⛽",color:C.orange,
+   searches:[
+     {type:"gas_station",keyword:null},
+     {type:"gas_station",keyword:"posto combustivel"},
+     {type:null,keyword:"posto gasolina"},
+     {type:null,keyword:"posto combustivel"},
+   ]},
+  {id:"tow",label:"Reboques",icon:"🚛",color:C.accent,
+   searches:[
+     {type:null,keyword:"reboque"},
+     {type:null,keyword:"guincho reboque"},
+     {type:null,keyword:"guincho 24h"},
+     {type:"car_repair",keyword:"reboque"},
+   ]},
 ];
 const MANUT = [
   {id:"oil",label:"Troca de Óleo",icon:"🛢️",kmAlert:3000},
@@ -186,17 +204,46 @@ export default function App(){
     const map=new window.google.maps.Map(document.createElement("div"));
     const svc=new window.google.maps.places.PlacesService(map);
     const ctr=new window.google.maps.LatLng(lat,lng);
-    const res={tire:[],gas:[],tow:[]};let done=0;
+    const res={tire:[],gas:[],tow:[]};
+    const seen={tire:new Set(),gas:new Set(),tow:new Set()};
+    const OK=window.google.maps.places.PlacesServiceStatus.OK;
+
+    // Total de buscas = soma de todos os searches de cada categoria
+    const totalSearches=CATS.reduce((s,c)=>s+c.searches.length,0);
+    let searchesDone=0;
+    let detailsPending=0;
+    let detailsDone=0;
+
+    function tryFinalize(){
+      if(searchesDone===totalSearches&&detailsDone===detailsPending){
+        // Ordenar por distância e limitar a 12 por categoria
+        CATS.forEach(cat=>{
+          res[cat.id].sort((a,b)=>
+            gd(lat,lng,a.geometry.location.lat(),a.geometry.location.lng())-
+            gd(lat,lng,b.geometry.location.lat(),b.geometry.location.lng())
+          );
+          res[cat.id]=res[cat.id].slice(0,12);
+        });
+        pinMarkers(lat,lng,res);setPlaces({...res});setBusy(false);
+      }
+    }
+
     CATS.forEach(cat=>{
-      svc.nearbySearch({location:ctr,radius:5000,...(cat.type&&{type:cat.type}),...(cat.keyword&&{keyword:cat.keyword})},(results,status)=>{
-        const OK=window.google.maps.places.PlacesServiceStatus.OK;
-        const items=status===OK&&results?results.slice(0,10):[];
-        if(!items.length){done++;if(done===CATS.length){pinMarkers(lat,lng,res);setPlaces({...res});setBusy(false);}return;}
-        let dd=0;
-        items.forEach(pl=>{
-          svc.getDetails({placeId:pl.place_id,fields:["name","formatted_phone_number","international_phone_number","geometry","vicinity","rating","user_ratings_total","opening_hours","place_id","photos"]},(det,ds)=>{
-            res[cat.id].push(ds===OK&&det?det:pl);dd++;
-            if(dd===items.length){res[cat.id].sort((a,b)=>gd(lat,lng,a.geometry.location.lat(),a.geometry.location.lng())-gd(lat,lng,b.geometry.location.lat(),b.geometry.location.lng()));done++;if(done===CATS.length){pinMarkers(lat,lng,res);setPlaces({...res});setBusy(false);}}
+      cat.searches.forEach(srch=>{
+        svc.nearbySearch({location:ctr,radius:5000,...(srch.type&&{type:srch.type}),...(srch.keyword&&{keyword:srch.keyword})},(results,status)=>{
+          const items=status===OK&&results?results:[];
+          searchesDone++;
+          // Filtrar só os que não vimos ainda
+          const newItems=items.filter(pl=>!seen[cat.id].has(pl.place_id));
+          newItems.forEach(pl=>seen[cat.id].add(pl.place_id));
+          detailsPending+=newItems.length;
+          if(!newItems.length){tryFinalize();return;}
+          newItems.forEach(pl=>{
+            svc.getDetails({placeId:pl.place_id,fields:["name","formatted_phone_number","international_phone_number","geometry","vicinity","rating","user_ratings_total","opening_hours","place_id"]},(det,ds)=>{
+              res[cat.id].push(ds===OK&&det?det:pl);
+              detailsDone++;
+              tryFinalize();
+            });
           });
         });
       });
