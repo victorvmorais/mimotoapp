@@ -199,18 +199,20 @@ export default function App(){
       await setDoc(doc(db,"users",USER_ID),newProfile);
       setProfile(newProfile);
 
-      // 2. Recalcula gauge de combustível com nova km
+      // 2. Recalcula gauge: usa km DO ABASTECIMENTO como base, não km anterior do perfil
       if(fuel.length>0){
         const lastFuel=fuel[0];
-        const lastKm=parseInt(lastFuel.km)||0;
+        const lastKm=parseInt(lastFuel.km)||0; // km registrada no momento do abastecimento
         const tankLVal=parseFloat(newProfile.tankL)||12;
         const lastLiters=lastFuel.tankFull?tankLVal:parseFloat(lastFuel.liters)||0;
         const kmplVal=parseFloat(newProfile.kmpl)||36;
-        if(lastKm>0){
-          const kmRodados=Math.max(0,km-lastKm);
+        if(lastKm>0&&km>lastKm){
+          const kmRodados=km-lastKm; // km atual informada MENOS km do abastecimento
           const consumed=kmRodados/kmplVal;
           const remaining=Math.max(0,lastLiters-consumed);
           setFuelLiters(remaining);
+        } else if(lastKm>0){
+          setFuelLiters(lastLiters); // km atual menor que do abastecimento, mostra cheio
         }
       }
 
@@ -254,16 +256,18 @@ export default function App(){
       setFuel(l);
       if(l.length>0){
         const la=l[0];
-        // Litros no último abastecimento
+        // Litros no último abastecimento (fonte da verdade)
         const lastLiters=la.tankFull?tankL:parseFloat(la.liters)||0;
         const lastKm=parseInt(la.km)||0;
-        // Se temos km atual e km do abastecimento, calcula consumo
+        // Calcula consumo apenas se temos a km do abastecimento E a km atual do perfil
+        // A km do abastecimento (lastKm) é SAGRADA — nunca sobrescrita
         if(currentKmVal>0&&lastKm>0&&currentKmVal>lastKm){
           const kmRodados=currentKmVal-lastKm;
           const consumed=kmRodados/kmplVal;
           const remaining=Math.max(0,lastLiters-consumed);
           setFuelLiters(remaining);
         }else{
+          // Sem km de referência — mostra litros do abastecimento sem dedução
           setFuelLiters(lastLiters);
         }
       }
