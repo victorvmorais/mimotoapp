@@ -551,7 +551,7 @@ export default function App(){
           </div>
 
           {/* GPS + 24h buttons */}
-          <div style={{position:"absolute",bottom:220,right:12,zIndex:10,display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{position:"absolute",bottom:300,right:12,zIndex:10,display:"flex",flexDirection:"column",gap:8}}>
             {searched&&!busy&&<button onClick={()=>setF24(v=>!v)} style={{background:f24?C.green:C.glass,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",border:f24?"none":`1px solid rgba(255,255,255,0.6)`,borderRadius:12,padding:"8px 12px",color:f24?C.white:C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"Outfit,sans-serif",boxShadow:"0 2px 12px rgba(27,45,91,0.12)",WebkitTapHighlightColor:"transparent"}}>
               🕐 24h
             </button>}
@@ -564,7 +564,7 @@ export default function App(){
           {locErr&&<div style={{position:"absolute",top:120,left:12,right:12,zIndex:10,background:C.red,borderRadius:12,padding:"10px 14px",fontSize:12,color:C.white,fontWeight:500}}>{locErr}</div>}
 
           {/* Bottom sheet — services */}
-          <div style={{position:"absolute",bottom:0,left:0,right:0,zIndex:20}}>
+          <div style={{position:"absolute",bottom:80,left:0,right:0,zIndex:20}}>
             <div style={{background:C.glass,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderRadius:"24px 24px 0 0",boxShadow:"0 -4px 30px rgba(27,45,91,0.12)",border:"1px solid rgba(255,255,255,0.7)",borderBottom:"none"}}>
               {/* Handle */}
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px 8px"}}>
@@ -626,7 +626,7 @@ export default function App(){
 
         {/* ═══ FUEL ═══ */}
         <div style={{display:nav==="fuel"?"flex":"none",flex:1,flexDirection:"column",overflow:"hidden"}}>
-          <div ref={nav==="fuel"?scrollRef:null} style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:80}}>
+          <div ref={nav==="fuel"?scrollRef:null} style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:90}}>
 
             {/* Hero gauge */}
             <div style={{background:`linear-gradient(160deg,${C.navyDark},${C.navy})`,padding:"24px 20px 28px",position:"relative",overflow:"hidden"}}>
@@ -689,7 +689,7 @@ export default function App(){
 
         {/* ═══ MANUT ═══ */}
         <div style={{display:nav==="maint"?"flex":"none",flex:1,flexDirection:"column",overflow:"hidden"}}>
-          <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:80}}>
+          <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:90}}>
 
             {/* Header */}
             <div style={{background:`linear-gradient(160deg,${C.navyDark},${C.navy})`,padding:"24px 20px 28px",position:"relative",overflow:"hidden"}}>
@@ -747,7 +747,7 @@ export default function App(){
 
         {/* ═══ PROFILE ═══ */}
         <div style={{display:nav==="profile"?"flex":"none",flex:1,flexDirection:"column",overflow:"hidden"}}>
-          <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:80}}>
+          <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:90}}>
 
             {/* Cover + Avatar */}
             <div style={{background:`linear-gradient(160deg,${C.navyDark},${C.navyMid})`,padding:"24px 20px 60px",position:"relative",overflow:"hidden"}}>
@@ -804,7 +804,7 @@ export default function App(){
 
         {/* ═══ GANHOS (UBER) ═══ */}
         <div style={{display:nav==="uber"?"flex":"none",flex:1,flexDirection:"column",overflow:"hidden"}}>
-          <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:80}}>
+          <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:90}}>
 
             {/* Hero header */}
             <div style={{background:"linear-gradient(160deg,"+C.navyDark+","+C.navy+")",padding:"24px 20px 28px",position:"relative",overflow:"hidden"}}>
